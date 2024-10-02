@@ -12,7 +12,7 @@
                 @elseif($seat['type'] === 'wc')
                     WC
                 @elseif($seat['type'] === 'coffee')
-                    Кавомашина
+                    Кавомашина1
                 @else
                     Інше
                 @endif

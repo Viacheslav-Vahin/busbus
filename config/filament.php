@@ -194,4 +194,10 @@ return [
 
     'resources_directory' => app_path('Filament/Resources'),
 
+//    'pages' => [
+//        'register' => [
+//            App\Filament\Pages\CreateBooking::class,
+//        ],
+//    ],
+
 ];

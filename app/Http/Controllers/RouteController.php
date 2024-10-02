@@ -19,19 +19,33 @@ class RouteController extends Controller
 
     public function getBusesByDate(Request $request)
     {
-        // Отримуємо маршрут та дату з запиту
         $routeId = $request->input('route_id');
         $date = $request->input('date');
 
-        // Отримуємо автобуси, які працюють на цьому маршруті в цю дату
         $buses = Bus::where('route_id', $routeId)
             ->whereHas('schedules', function ($query) use ($date) {
                 $query->where('date', $date);
             })
             ->get();
 
-        // Повертаємо автобуси у форматі JSON
         return response()->json($buses);
     }
+
+    public function getBusesByRouteAndDate(Request $request)
+    {
+        $routeId = $request->route_id;
+        $date = $request->date;
+
+        $buses = Bus::where('route_id', $routeId)
+            ->whereHas('schedules', function ($query) use ($date) {
+                $query->where('date', $date);
+            })
+            ->get();
+
+        return response()->json($buses);
+    }
+
+
+
 }
 
