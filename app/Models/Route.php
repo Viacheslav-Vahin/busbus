@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 class Route extends Model
 {
     use HasFactory;
-
-    protected $fillable = ['start_point', 'end_point', 'date'];
+    // Route.php
+    protected $fillable = ['start_point', 'end_point', 'date', 'ticket_price'];
 
     public function buses()
     {

@@ -78,6 +78,7 @@ class Bus extends Model
     {
         return $this->hasMany(BusStop::class);
     }
+
     public function boarding_points()
     {
         return $this->hasMany(BusStop::class)->where('type', 'boarding');
@@ -87,6 +88,48 @@ class Bus extends Model
     {
         return $this->hasMany(BusStop::class)->where('type', 'dropping');
     }
+
+    public function saveBusStops($bus, $data)
+    {
+        // Очищуємо існуючі зупинки
+        $bus->busStops()->delete();
+
+        // Збереження пунктів посадки
+        if (isset($data['boarding_points'])) {
+            foreach ($data['boarding_points'] as $boardingPoint) {
+                $bus->busStops()->create([
+                    'stop_id' => $boardingPoint['stop_id'],
+                    'type' => 'boarding',
+                    'time' => $boardingPoint['time'],
+                ]);
+            }
+        }
+
+        // Збереження пунктів висадки
+        if (isset($data['dropping_points'])) {
+            foreach ($data['dropping_points'] as $droppingPoint) {
+                $bus->busStops()->create([
+                    'stop_id' => $droppingPoint['stop_id'],
+                    'type' => 'dropping',
+                    'time' => $droppingPoint['time'],
+                ]);
+            }
+        }
+    }
+
+//    public static function searchBuses($routeId, $date)
+//    {
+//        // Форматуємо дату для перевірки дня тижня
+//        $dayOfWeek = date('l', strtotime($date));
+//
+//        // Шукаємо автобуси по заданому маршруту, які їздять по заданому дню тижня
+//        return self::where('route_id', $routeId)
+//            ->where(function ($query) use ($dayOfWeek, $date) {
+//                $query->whereJsonContains('weekly_operation_days', $dayOfWeek)
+//                    ->orWhereJsonContains('operation_days', $date);
+//            })
+//            ->get();
+//    }
 
 }
 

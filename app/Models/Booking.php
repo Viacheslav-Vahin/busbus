@@ -32,4 +32,12 @@ class Booking extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function calculatePrice($adultTickets, $childTickets)
+    {
+        // Приклад обчислення з урахуванням знижок для дітей
+        $adultPrice = $this->route->ticket_price; // Використовуємо ціну маршруту
+        $childDiscount = 0.5; // 50% знижка для дітей
+        return ($adultTickets * $adultPrice) + ($childTickets * $adultPrice * $childDiscount);
+    }
 }

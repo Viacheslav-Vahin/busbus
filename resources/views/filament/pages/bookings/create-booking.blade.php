@@ -11,6 +11,7 @@
                 <option value="">Виберіть маршрут</option>
                 @foreach ($routes as $route)
                     <option value="{{ $route['id'] }}">{{ $route['name'] }}</option>
+{{--                    <option value="{{ $route }}">{{ $route }}</option>--}}
                 @endforeach
             </select>
 
