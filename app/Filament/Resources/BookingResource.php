@@ -1,84 +1,4 @@
 <?php
-//
-//namespace App\Filament\Resources;
-//
-//use App\Filament\Resources\BookingResource\Pages;
-//use App\Filament\Resources\BookingResource\RelationManagers;
-//use App\Models\Booking;
-//use Filament\Forms;
-//use Filament\Forms\Form;
-//use Filament\Resources\Resource;
-//use Filament\Tables;
-//use Filament\Tables\Table;
-//use Illuminate\Database\Eloquent\Builder;
-//use Illuminate\Database\Eloquent\SoftDeletingScope;
-//
-//class BookingResource extends Resource
-//{
-//    protected static ?string $model = Booking::class;
-//
-//    protected static ?string $navigationIcon = 'heroicon-o-calculator';
-//
-//    public static function form(Form $form): Form
-//    {
-//        return $form
-//            ->schema([
-//                Forms\Components\Select::make('trip_id')
-//                    ->relationship('trip', 'start_location')
-//                    ->required(),
-//                Forms\Components\Select::make('user_id')
-//                    ->relationship('user', 'name')
-//                    ->required(),
-//                Forms\Components\TextInput::make('seat_number')
-//                    ->numeric()
-//                    ->required(),
-//                Forms\Components\TextInput::make('price')
-//                    ->numeric()
-//                    ->required(),
-//                Forms\Components\CheckboxList::make('additional_services')
-//                    ->options([
-//                        'coffee' => 'Кава',
-//                        'blanket' => 'Плед',
-//                        'improved_service' => 'Покращений сервіс',
-//                    ]),
-//            ]);
-//    }
-//
-//    public static function table(Table $table): Table
-//    {
-//        return $table
-//            ->columns([
-//                Tables\Columns\TextColumn::make('trip.start_location')
-//                    ->label('Trip Start')
-//                    ->sortable()
-//                    ->searchable(),
-//                Tables\Columns\TextColumn::make('user.name')
-//                    ->label('User')
-//                    ->sortable()
-//                    ->searchable(),
-//                Tables\Columns\TextColumn::make('seat_number')
-//                    ->sortable()
-//                    ->searchable(),
-//                Tables\Columns\TextColumn::make('price')
-//                    ->money('USD'),
-//                Tables\Columns\BadgeColumn::make('additional_services')
-//                    ->colors([
-//                        'primary',
-//                    ]),
-//            ]);
-//    }
-//
-//    public static function getPages(): array
-//    {
-//        return [
-//            'index' => Pages\ListBookings::route('/'),
-//            'create' => Pages\CreateBooking::route('/create'),
-//            'edit' => Pages\EditBooking::route('/{record}/edit'),
-//        ];
-//    }
-//}
-
-
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\BookingResource\Pages;
@@ -92,6 +12,8 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Grid;
@@ -117,13 +39,8 @@ class BookingResource extends Resource
                             ->required()
                             ->afterStateUpdated(function (callable $get, callable $set) {
                                 $routeId = $get('route_id');
-                                $date = $get('date');
 
                                 if ($routeId) {
-                                    $buses = BookingResource::searchBuses($routeId, $date);
-                                    $set('buses', $buses->pluck('name', 'id')->toArray());
-
-                                    // Отримуємо доступні дні для рейсу
                                     $availableDates = BookingResource::getAvailableDates($routeId);
                                     $set('available_dates', $availableDates);
                                 }
@@ -132,48 +49,31 @@ class BookingResource extends Resource
                             ->label('Прибуття у:')
                             ->options(Route::all()->pluck('end_point', 'id'))
                             ->reactive()
-                            ->required()
-                            ->afterStateUpdated(function (callable $get, callable $set) {
-                                $routeId = $get('route_id');
-                                $date = $get('date');
-
-                                if ($routeId) {
-                                    $buses = BookingResource::searchBuses($routeId, $date);
-                                    $set('buses', $buses->pluck('name', 'id')->toArray());
-
-                                    // Отримуємо доступні дні для рейсу
-                                    $availableDates = BookingResource::getAvailableDates($routeId);
-                                    $set('available_dates', $availableDates);
-                                }
-                            }),
+                            ->required(),
                         DatePicker::make('date')
                             ->label('Дата поїздки')
                             ->required()
                             ->reactive()
-                            ->afterStateUpdated(function (callable $get, callable $set) {
-                                $routeId = $get('route_id');
-                                $date = $get('date');
-
-                                if ($routeId) {
-                                    $buses = BookingResource::searchBuses($routeId, $date);
-                                    $set('buses', $buses->pluck('name', 'id')->toArray());
-
-                                    // Отримуємо доступні дні для рейсу
-                                    $availableDates = BookingResource::getAvailableDates($routeId);
-                                    $set('available_dates', $availableDates);
-                                }
-                            })
                             ->disabledDates(function (callable $get) {
                                 $availableDates = $get('available_dates');
                                 if ($availableDates) {
-                                    return function ($date) use ($availableDates) {
-                                        return !in_array($date->format('Y-m-d'), $availableDates);
-                                    };
+                                    $today = Carbon::today();
+                                    $nextYear = Carbon::today()->addYear();
+                                    $disabledDates = [];
+
+                                    while ($today->lte($nextYear)) {
+                                        if (!in_array($today->format('Y-m-d'), $availableDates)) {
+                                            $disabledDates[] = $today->format('Y-m-d');
+                                        }
+                                        $today->addDay();
+                                    }
+                                    return $disabledDates;
                                 }
                                 return [];
                             })
                             ->minDate(now())
-                            ->closeOnDateSelection(true),
+                            ->closeOnDateSelection(true)
+                            ->native(false),
                         Actions::make([
                             Action::make('search_buses')
                                 ->label('Пошук')
@@ -210,10 +110,11 @@ class BookingResource extends Resource
             // Додаємо дні тижня
             if (is_array($weeklyDays)) {
                 foreach ($weeklyDays as $day) {
-                    // Перетворюємо назву дня в дату
-                    $dayNumber = Carbon::parse($day)->dayOfWeek;
-                    $nextAvailableDate = Carbon::now()->next($dayNumber);
-                    $availableDates[] = $nextAvailableDate->format('Y-m-d');
+                    $dayOfWeek = Carbon::parse($day)->dayOfWeek;
+                    for ($i = 0; $i < 4; $i++) { // Наступні 4 тижні
+                        $nextAvailableDate = Carbon::now()->next($dayOfWeek)->addWeeks($i);
+                        $availableDates[] = $nextAvailableDate->format('Y-m-d');
+                    }
                 }
             }
 
@@ -223,10 +124,8 @@ class BookingResource extends Resource
             }
         }
 
-        return $availableDates;
+        return array_unique($availableDates);
     }
-
-
 
     public static function table(Tables\Table $table): Tables\Table
     {
@@ -269,7 +168,7 @@ class BookingResource extends Resource
 
         return $buses;
     }
-
 }
+
 
 
