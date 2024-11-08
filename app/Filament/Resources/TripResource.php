@@ -3,42 +3,66 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\TripResource\Pages;
-use App\Filament\Resources\TripResource\RelationManagers;
 use App\Models\Trip;
+use App\Models\Route;
+use App\Models\Bus;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\DateTimePicker;
 
 class TripResource extends Resource
 {
     protected static ?string $model = Trip::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-briefcase';
+    protected static ?string $navigationIcon = 'heroicon-o-calendar';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Forms\Components\Select::make('bus_id')
-                    ->relationship('bus', 'name')
+                Select::make('bus_id')
+                    ->label('Автобус')
+                    ->options(Bus::all()->pluck('name', 'id'))
                     ->required(),
-                Forms\Components\TextInput::make('start_location')
+                Select::make('route_id')
+                    ->label('Маршрут')
+                    ->options(Route::all()->mapWithKeys(function ($route) {
+                        return [$route->id => $route->start_point . ' - ' . $route->end_point];
+                    }))
+                    ->reactive()
                     ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('end_location')
+                    ->afterStateUpdated(function (callable $set, $state) {
+                        $route = Route::find($state);
+                        if ($route) {
+                            $set('start_location', $route->start_point);
+                            $set('end_location', $route->end_point);
+                        }
+                    }),
+                TextInput::make('start_location')
+                    ->label('Початкова локацiя')
                     ->required()
-                    ->maxLength(255),
-                Forms\Components\DateTimePicker::make('departure_time')
+                    ->disabled()
+                    ->dehydrated(),
+                TextInput::make('end_location')
+                    ->label('Кiнцева локацiя')
+                    ->required()
+                    ->disabled()
+                    ->dehydrated(),
+                DateTimePicker::make('departure_time')
+                    ->label('Час вiдправлення')
                     ->required(),
-                Forms\Components\DateTimePicker::make('arrival_time')
+                DateTimePicker::make('arrival_time')
+                    ->label('Час прибуття')
                     ->required(),
-                Forms\Components\TextInput::make('price')
-                    ->numeric()
-                    ->required(),
+                TextInput::make('price')
+                    ->label('Цiна квитка')
+                    ->required()
+                    ->numeric(),
             ]);
     }
 
@@ -47,27 +71,23 @@ class TripResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('bus.name')
-                    ->label('Bus')
-                    ->sortable()
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('start_location')
-                    ->sortable()
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('end_location')
-                    ->sortable()
-                    ->searchable(),
+                    ->label('Автобус')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('route.start_point')
+                    ->label('Початкова локацiя')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('route.end_point')
+                    ->label('Кiнцева локацiя')
+                    ->sortable(),
                 Tables\Columns\TextColumn::make('departure_time')
-                    ->dateTime()
+                    ->label('Час вiдправлення')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('arrival_time')
-                    ->dateTime()
+                    ->label('Час прибуття')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('price')
-                    ->sortable()
-                    ->money('USD'),
-            ])
-            ->filters([
-                // Додайте фільтри, якщо потрібно
+                    ->label('Цiна квитка')
+                    ->sortable(),
             ]);
     }
 

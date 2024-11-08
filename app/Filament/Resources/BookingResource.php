@@ -1,10 +1,13 @@
 <?php
+// BookingResource.php
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\BookingResource\Pages;
 use App\Models\Booking;
 use App\Models\Bus;
 use App\Models\Route;
+use App\Models\Trip;
+use App\Models\Discount;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -12,13 +15,13 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\TimePicker;
-use Filament\Forms\Components\Actions;
-use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Grid;
-use Illuminate\Http\Request;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\TextInput;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
+use Filament\Forms\Components\View;
+use App\Forms\Components\SeatSelector;
 
 class BookingResource extends Resource
 {
@@ -26,10 +29,14 @@ class BookingResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-ticket';
 
-    public static function form(Forms\Form $form): Forms\Form
+    public static function form(Form $form): Form
     {
         return $form
             ->schema([
+                TextInput::make('user_id')
+                    ->default(auth()->id())
+                    ->hidden()
+                    ->required(),
                 Grid::make()
                     ->schema([
                         Select::make('route_id')
@@ -43,17 +50,57 @@ class BookingResource extends Resource
                                 if ($routeId) {
                                     $availableDates = BookingResource::getAvailableDates($routeId);
                                     $set('available_dates', $availableDates);
+
+                                    $buses = BookingResource::searchBuses($routeId, $get('date'));
+                                    $set('buses', $buses->toArray());
                                 }
                             }),
+
                         Select::make('destination_id')
                             ->label('Прибуття у:')
                             ->options(Route::all()->pluck('end_point', 'id'))
                             ->reactive()
                             ->required(),
+
+                        Select::make('trip_id')
+                            ->label('Виберіть поїздку')
+                            ->options(Trip::all()->mapWithKeys(function ($trip) {
+                                return [$trip->id => $trip->bus->name . ' - ' . $trip->start_location . ' до ' . $trip->end_location];
+                            }))
+                            ->reactive()
+                            ->required()
+                            ->afterStateUpdated(function (callable $get, callable $set) {
+                                $tripId = $get('trip_id');
+                                if ($tripId) {
+                                    $trip = Trip::find($tripId);
+                                    if ($trip) {
+                                        $set('bus_id', $trip->bus_id);
+                                        $basePrice = $trip->calculatePrice();
+                                        $set('base_price', $basePrice);
+
+                                        $ticketType = $get('ticket_type');
+                                        $discountId = $get('discount_id');
+                                        $finalPrice = self::calculateFinalPrice($basePrice, $ticketType, $discountId);
+                                        $set('price', $finalPrice);
+                                    }
+                                }
+                            }),
+
                         DatePicker::make('date')
                             ->label('Дата поїздки')
                             ->required()
                             ->reactive()
+                            ->afterStateUpdated(function (callable $get, callable $set) {
+                                $routeId = $get('route_id');
+
+                                if ($routeId) {
+                                    $availableDates = BookingResource::getAvailableDates($routeId);
+                                    $set('available_dates', $availableDates);
+
+                                    $buses = BookingResource::searchBuses($routeId, $get('date'));
+                                    $set('buses', $buses->toArray());
+                                }
+                            })
                             ->disabledDates(function (callable $get) {
                                 $availableDates = $get('available_dates');
                                 if ($availableDates) {
@@ -74,24 +121,172 @@ class BookingResource extends Resource
                             ->minDate(now())
                             ->closeOnDateSelection(true)
                             ->native(false),
-                        Actions::make([
-                            Action::make('search_buses')
-                                ->label('Пошук')
-                                ->button()
-                                ->color('primary')
-                                ->action(function ($get, $set) {
-                                    $routeId = $get('route_id');
-                                    $date = $get('date');
-                                    $buses = BookingResource::searchBuses($routeId, $date);
-                                    $set('buses', $buses);
-                                })
-                                ->requiresConfirmation(false),
-                        ]),
-                        Select::make('buses')
-                            ->label('Доступні автобуси')
-                            ->options(fn($get) => $get('buses') ?? [])
-                            ->required(),
+                    ]),
+
+                Grid::make()
+                    ->schema([
+                        Select::make('bus_id')
+                            ->label('Виберіть автобус:')
+                            ->options(function (callable $get) {
+                                $buses = $get('buses');
+                                if ($buses) {
+                                    return collect($buses)->pluck('name', 'id');
+                                }
+                                return [];
+                            })
+                            ->reactive()
+                            ->required()
+                            ->afterStateUpdated(function (callable $get, callable $set) {
+                                $busId = $get('bus_id');
+                                $selectedDate = $get('date');
+                                Log::info('Bus ID selected', ['bus_id' => $busId, 'selected_date' => $selectedDate]);
+
+                                if ($busId && $busId !== $get('previous_bus_id')) {
+                                    $set('previous_bus_id', $busId);
+                                    $bus = Bus::find($busId);
+                                    if ($bus) {
+                                        Log::info('Bus found', ['bus' => $bus->toArray()]);
+                                        if ($bus && is_array($bus->seat_layout)) {
+                                            // Отримання всіх заброньованих місць для обраного автобуса та дати
+                                            $bookings = Booking::where('bus_id', $busId)
+                                                ->whereDate('date', $selectedDate)
+                                                ->get()
+                                                ->pluck('seat_number')
+                                                ->toArray();
+                                            Log::info('Booked seats retrieved', ['booked_seats' => $bookings]);
+
+                                            // Додавання інформації про заброньовані місця
+                                            $seatLayout = collect($bus->seat_layout)->map(function ($seat) use ($bookings) {
+                                                if (isset($seat['number']) && in_array($seat['number'], $bookings)) {
+                                                    $seat['is_reserved'] = true;
+                                                } else {
+                                                    $seat['is_reserved'] = false;
+                                                }
+                                                return $seat;
+                                            })->toArray();
+
+                                            $set('seat_layout', $seatLayout);
+                                            Log::info('Seat layout updated with reserved status', ['seat_layout' => $seatLayout]);
+                                        } else {
+                                            $set('seat_layout', []);
+                                            Log::warning('Seat layout is not available or is not an array');
+                                        }
+                                    } else {
+                                        Log::info('Bus not found', ['bus_id' => $busId]);
+                                    }
+                                }
+                            })
+                    ]),
+
+                Forms\Components\Placeholder::make('seat_layout')
+                    ->label('Вибір місць')
+                    ->content(function ($state) {
+                        if ($state) {
+                            return view('livewire.seat-selector', ['state' => $state]);
+                        }
+                        return 'No seat layout available';
+                    })
+                    ->reactive()
+                    ->afterStateUpdated(function ($state, callable $set) {
+                        if ($state) {
+                            $set('price', $state['seatPrice'] ?? 0);
+                        }
+                    }),
+
+//                Forms\Components\Placeholder::make('seat_layout')
+//                    ->label('Вибір місць')
+//                    ->content(function ($state) {
+//                        if ($state) {
+//                            return '<div>' . \Livewire\Livewire::mount('seat-selector', ['state' => $state])->html() . '</div>';
+//                        }
+//                        return 'No seat layout available';
+//                    }),
+
+//                Forms\Components\View::make('livewire.seat-selector')
+//                    ->label('Вибір місць')
+//                    ->extraAttributes(function (callable $state) {
+//                        Log::info('State in seat-selector:', ['state' => $state]);
+//                        return ['state' => $state('seat_layout') ?? []];
+//                    }),
+
+//                Forms\Components\Livewire::make('seatSelector')
+//                    ->component('seat-selector')
+//                    ->reactive(),
+
+//                SeatSelector::make('seat_layout')
+//                    ->label('Вибір місць')
+//                    ->setState(['state' => 'yourSeatLayoutData']),
+
+                TextInput::make('selected_seat')
+                    ->label('Вибране місце')
+                    ->reactive()
+                    ->required(),
+
+                Select::make('ticket_type')
+                    ->label('Тип квитка')
+                    ->options([
+                        'adult' => 'Дорослий',
+                        'child' => 'Дитячий',
                     ])
+                    ->required()
+                    ->reactive()
+                    ->afterStateUpdated(function (callable $get, callable $set) {
+                        $basePrice = $get('base_price');
+                        $ticketType = $get('ticket_type');
+                        $discountId = $get('discount_id');
+
+                        $finalPrice = self::calculateFinalPrice($basePrice, $ticketType, $discountId);
+                        $set('price', $finalPrice);
+                    }),
+
+                Select::make('discount_id')
+                    ->label('Знижка')
+                    ->options(Discount::all()->pluck('name', 'id'))
+                    ->nullable()
+                    ->reactive()
+                    ->afterStateUpdated(function (callable $get, callable $set) {
+                        $basePrice = $get('base_price');
+                        $ticketType = $get('ticket_type');
+                        $discountId = $get('discount_id');
+
+                        $finalPrice = self::calculateFinalPrice($basePrice, $ticketType, $discountId);
+                        $set('price', $finalPrice);
+                    }),
+
+                TextInput::make('price')
+                    ->label('Ціна')
+                    ->required()
+                    ->numeric()
+                    ->reactive(),
+
+                TextInput::make('base_price')
+                    ->label('Базова ціна')
+                    ->hidden()
+                    ->required()
+                    ->numeric(),
+
+                Grid::make()
+                    ->schema([
+                        Repeater::make('passengers')
+                            ->label('Дані пасажирів')
+                            ->schema([
+                                TextInput::make('name')
+                                    ->label("Ім'я пасажира")
+                                    ->required(),
+                                TextInput::make('surname')
+                                    ->label('Прізвище пасажира')
+                                    ->required(),
+                                TextInput::make('phone_number')
+                                    ->label('Номер телефону')
+                                    ->required(),
+                                TextInput::make('email')
+                                    ->label('Електронна пошта'),
+                                TextInput::make('note')
+                                    ->label('Примітка'),
+                            ])
+                            ->minItems(1)
+                            ->columns(2),
+                    ]),
             ]);
     }
 
@@ -127,7 +322,7 @@ class BookingResource extends Resource
         return array_unique($availableDates);
     }
 
-    public static function table(Tables\Table $table): Tables\Table
+    public static function table(Table $table): Table
     {
         return $table
             ->columns([
@@ -168,7 +363,34 @@ class BookingResource extends Resource
 
         return $buses;
     }
+
+    private static function calculateFinalPrice($basePrice, $ticketType, $discountId)
+    {
+        if (!$basePrice) {
+            return 0;
+        }
+
+        // Застосувати тип квитка (дитячий квиток має знижку 20%)
+        $ticketTypeDiscount = $ticketType === 'child' ? 0.8 : 1.0;
+        $finalPrice = $basePrice * $ticketTypeDiscount;
+
+        // Застосувати знижку
+        if ($discountId) {
+            $discount = Discount::find($discountId);
+            if ($discount) {
+                $finalPrice = $finalPrice * (1 - ($discount->percentage / 100));
+            }
+        }
+
+        return max($finalPrice, 0);
+    }
+
+    // Додаємо Livewire метод для встановлення обраного місця та ціни
+//    public static function setSelectedSeat($seatNumber, $seatPrice)
+//    {
+//        self::fill([
+//            'selected_seat' => $seatNumber,
+//            'price' => $seatPrice,
+//        ]);
+//    }
 }
-
-
-

@@ -4,6 +4,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RouteController;
 use App\Http\Controllers\RouteScheduleController;
 use App\Filament\Resources\BusResource\Pages\EditBus;
+use App\Http\Controllers\BookingController;
+
 
 
 Route::get('/', function () {
@@ -24,3 +26,4 @@ Route::post('/get-buses-by-date', [RouteScheduleController::class, 'getBusesByDa
 //Route::post('/get-buses-by-route-date', [RouteController::class, 'getBusesByRouteAndDate'])->name('get-buses-by-route-date');
 //Route::get('/admin/buses/{record}/edit', [EditBus::class, 'mount'])
 //    ->name('admin.buses.edit');
+Route::post('/booking/store', [BookingController::class, 'store'])->name('booking.store');

@@ -1,5 +1,5 @@
 <?php
-
+// BusBookingSystem/app/Models/Booking.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,6 +11,7 @@ class Booking extends Model
 
     protected $casts = [
         'additional_services' => 'array',
+        'passengers' => 'array',
     ];
 
     // Вказуємо які поля можуть бути масово присвоєні
@@ -20,6 +21,13 @@ class Booking extends Model
         'seat_number',
         'price',
         'additional_services',
+        'bus_id',
+        'route_id',
+        'destination_id',
+        'seat_number',
+        'selected_seat',
+        'date',
+        'passengers',
     ];
 
     // Визначаємо зв'язки з іншими моделями
