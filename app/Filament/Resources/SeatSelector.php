@@ -1,6 +1,8 @@
 <?php
+// app/Filament/Resources/SeatSelector.php
 
-namespace App\Forms\Components;
+//namespace App\Forms\Components;
+namespace App\Filament\Resources;
 
 use Filament\Forms\Components\Field;
 

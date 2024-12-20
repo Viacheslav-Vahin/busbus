@@ -21,7 +21,15 @@ use Filament\Forms\Components\TextInput;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Filament\Forms\Components\View;
-use App\Forms\Components\SeatSelector;
+
+//use App\Forms\Components\SeatSelector;
+//use App\Filament\Resources\SeatSelector;
+//use App\Http\Livewire\SeatSelector;
+use App\Filament\Resources\SeatSelector;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Set;
+use Filament\Forms\Components\Livewire;
+use Livewire\Component as LivewireComponent;
 
 class BookingResource extends Resource
 {
@@ -166,6 +174,7 @@ class BookingResource extends Resource
                                             })->toArray();
 
                                             $set('seat_layout', $seatLayout);
+
                                             Log::info('Seat layout updated with reserved status', ['seat_layout' => $seatLayout]);
                                         } else {
                                             $set('seat_layout', []);
@@ -175,52 +184,66 @@ class BookingResource extends Resource
                                         Log::info('Bus not found', ['bus_id' => $busId]);
                                     }
                                 }
-                            })
+                            }),
+
+                         Livewire::make('App\Http\Livewire\SeatSelector')
+                             ->label('Вибір місць')
+                             ->key('SeatSelector')
+                             ->reactive()
+                             ->statePath('seat_layout')
+                             ->afterStateUpdated(function (callable $get, callable $set) {
+                                 Log::info('Livewire seat_layout updated', ['seat_layout' => $get('seat_layout')]);
+                             })
+                             ->dehydrated(fn($state) => filled($state)),
                     ]),
 
-                Forms\Components\Placeholder::make('seat_layout')
-                    ->label('Вибір місць')
-                    ->content(function ($state) {
-                        if ($state) {
-                            return view('livewire.seat-selector', ['state' => $state]);
-                        }
-                        return 'No seat layout available';
-                    })
-                    ->reactive()
-                    ->afterStateUpdated(function ($state, callable $set) {
-                        if ($state) {
-                            $set('price', $state['seatPrice'] ?? 0);
-                        }
-                    }),
 
 //                Forms\Components\Placeholder::make('seat_layout')
 //                    ->label('Вибір місць')
 //                    ->content(function ($state) {
 //                        if ($state) {
-//                            return '<div>' . \Livewire\Livewire::mount('seat-selector', ['state' => $state])->html() . '</div>';
+//                            return view('livewire.seat-selector', ['state' => $state]);
 //                        }
 //                        return 'No seat layout available';
+//                    })
+//                    ->reactive()
+//                    ->live()
+//                    ->afterStateUpdated(function ($state, callable $set) {
+//                        if ($state) {
+//                            Log::info('Livewire afterStateUpdated', ['$state' => $state]);
+//                            $set('price', $state['seatPrice'] ?? 0);
+//                        }
+//                    }),
+
+//                Livewire::make('App\Http\Livewire\SeatSelector')
+//                    ->label('Вибір місць')
+//                    ->key('SeatSelector')
+//                    ->reactive()
+//                    ->statePath('seat_layout')
+//                    ->dehydrated(fn($state) => filled($state))
+//                    ->afterStateUpdated(function (callable $get, callable $set) {
+//                        Log::info('Livewire seat_layout updated', ['seat_layout' => $get('seat_layout')]);
 //                    }),
 
 //                Forms\Components\View::make('livewire.seat-selector')
 //                    ->label('Вибір місць')
-//                    ->extraAttributes(function (callable $state) {
-//                        Log::info('State in seat-selector:', ['state' => $state]);
-//                        return ['state' => $state('seat_layout') ?? []];
+//                    ->statePath('seat_layout')
+//                    ->reactive()
+//                    ->afterStateUpdated(function ($state, callable $set) {
+//                        Log::info('Livewire seat_layout updated', ['seat_layout' => $state]);
 //                    }),
 
-//                Forms\Components\Livewire::make('seatSelector')
-//                    ->component('seat-selector')
-//                    ->reactive(),
-
-//                SeatSelector::make('seat_layout')
-//                    ->label('Вибір місць')
-//                    ->setState(['state' => 'yourSeatLayoutData']),
 
                 TextInput::make('selected_seat')
                     ->label('Вибране місце')
+                    ->required()
                     ->reactive()
-                    ->required(),
+                    ->afterStateUpdated(function ($state, Set $set) {
+                        if ($state) {
+                            // Оновлення стану ціни на основі вибраного місця
+                            $set('price', $state['seatPrice']);
+                        }
+                    }),
 
                 Select::make('ticket_type')
                     ->label('Тип квитка')
@@ -385,6 +408,31 @@ class BookingResource extends Resource
         return max($finalPrice, 0);
     }
 
+    protected static function getListeners(): array
+    {
+        return [
+            'handleSeatSelected' => 'handleSeatSelected',
+        ];
+    }
+
+//    public function handleSeatSelected($seatNumber, $seatPrice)
+//    {
+//        Log::info('handleSeatSelected викликано', ['seatNumber' => $seatNumber, 'seatPrice' => $seatPrice]);
+//
+//        // Оновлюємо значення обраного місця та ціну.
+//        $this->form->fill([
+//            'selected_seat' => $seatNumber,
+//            'price' => $seatPrice,
+//        ]);
+//    }
+
+    public function handleUpdateParentState($data)
+    {
+        Log::info('handleUpdateParentState викликано', $data);
+        $this->form->fill($data);
+    }
+
+
     // Додаємо Livewire метод для встановлення обраного місця та ціни
 //    public static function setSelectedSeat($seatNumber, $seatPrice)
 //    {
@@ -393,4 +441,21 @@ class BookingResource extends Resource
 //            'price' => $seatPrice,
 //        ]);
 //    }
+
+    public function handleSeatSelected($seatNumber, $seatPrice) : void
+    {
+        Log::info('Метод handleSeatSelected викликано', ['seatNumber' => $seatNumber, 'seatPrice' => $seatPrice]);
+
+        // Перевірка стану перед оновленням
+        Log::info('Стан форми перед оновленням', $this->form->getState());
+
+        // Оновлюємо значення обраного місця та ціни.
+        $this->form->fill([
+            'selected_seat' => $seatNumber,
+            'price' => $seatPrice,
+        ]);
+
+        // Перевірка стану після оновлення
+        Log::info('Стан форми після оновлення', $this->form->getState());
+    }
 }
