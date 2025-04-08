@@ -16,16 +16,15 @@
     </style>
 
     @filamentStyles
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    @vite('resources/css/app.css')
 </head>
 
 <body class="antialiased">
-{{ $slot }}
 
+{{ $slot }}
+<div style="background: yellow;">My Custom Layout</div>
 @filamentScripts
 @livewireScripts
-@vite('resources/js/app.js')
 </body>
 </html>

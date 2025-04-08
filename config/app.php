@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'MaxBus'),
+    'name' => env('APP_NAME', 'MaxBus Пасажирські перевезення'),
 
     /*
     |--------------------------------------------------------------------------
@@ -104,6 +104,15 @@ return [
             explode(',', env('APP_PREVIOUS_KEYS', ''))
         ),
     ],
+
+    'providers' => [
+        App\Providers\FilamentServiceProvider::class,
+    ],
+
+//    'layouts' => [
+//        'app' => App\Filament\Layouts\AppLayout::class,
+//        'panel' => App\Filament\Layouts\PanelLayout::class,
+//    ],
 
     /*
     |--------------------------------------------------------------------------

@@ -19,7 +19,7 @@
             <form action="{{ route('booking.reserveSeat') }}" method="POST">
                 @csrf
                 <input type="hidden" name="bus_id" value="{{ $bus->id }}">
-                <input type="hidden" id="seat_number" name="seat_number">
+                <input type="hidden" id="seat_number" data-seatnumber="{{ $bus->id }}" name="seat_number">
                 <div class="form-group">
                     <label for="passenger_name">Ім'я пасажира:</label>
                     <input type="text" id="passenger_name" name="passenger_name" class="form-control" required>

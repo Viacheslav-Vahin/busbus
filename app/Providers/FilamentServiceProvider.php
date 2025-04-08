@@ -10,18 +10,18 @@ class FilamentServiceProvider extends ServiceProvider
     public function boot()
     {
         Filament::serving(function () {
-            Filament::registerTheme(mix('css/filament.css'));
+            // Видаляємо виклик mix() і використовуємо тільки Vite
+            Filament::registerViteTheme([
+                'resources/css/app.css',
+                'resources/js/app.js',
+            ]);
         });
     }
 
-    /**
-     * Register any application services.
-     *
-     * @return void
-     */
     public function register()
     {
-        // Реєструйте будь-які послуги, пов'язані з Filament тут
+        // Реєструємо додаткові сервіси для Filament, якщо потрібно
     }
 }
+
 ?>

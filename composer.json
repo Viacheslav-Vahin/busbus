@@ -5,11 +5,12 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.3.0",
         "barryvdh/laravel-dompdf": "*",
         "filament/filament": "^3.2",
         "laravel/framework": "^11.9",
         "laravel/tinker": "^2.9",
+        "livewire/livewire": "^v3.5.12",
         "openai-php/laravel": "^0.10.1",
         "simplesoftwareio/simple-qrcode": "*",
         "tomatophp/filament-translations": "^1.0"

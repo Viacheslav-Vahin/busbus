@@ -14,7 +14,7 @@ class BookingController extends Controller
             'bus_id' => 'required|exists:buses,id',
             'date' => 'required|date',
             'selected_seat' => 'required|integer',
-            // інші поля...
+            'seat_number' => 'required|integer',
         ]);
 
         $existingBooking = Booking::where('bus_id', $validatedData['bus_id'])

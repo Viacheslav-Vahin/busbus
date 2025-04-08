@@ -1,7 +1,7 @@
 <?php
-// BookingResource.php
 namespace App\Filament\Resources;
 
+//use Livewire\Livewire;
 use App\Filament\Resources\BookingResource\Pages;
 use App\Models\Booking;
 use App\Models\Bus;
@@ -20,16 +20,10 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
-use Filament\Forms\Components\View;
-
-//use App\Forms\Components\SeatSelector;
-//use App\Filament\Resources\SeatSelector;
-//use App\Http\Livewire\SeatSelector;
-use App\Filament\Resources\SeatSelector;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Set;
 use Filament\Forms\Components\Livewire;
-use Livewire\Component as LivewireComponent;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\ViewField;
 
 class BookingResource extends Resource
 {
@@ -59,8 +53,13 @@ class BookingResource extends Resource
                                     $availableDates = BookingResource::getAvailableDates($routeId);
                                     $set('available_dates', $availableDates);
 
-                                    $buses = BookingResource::searchBuses($routeId, $get('date'));
-                                    $set('buses', $buses->toArray());
+                                    // Clear dependent fields
+                                    $set('date', null);
+                                    $set('bus_id', null);
+                                    $set('seat_layout', null);
+                                    $set('selected_seat', null);
+                                    $set('seat_number', null);
+                                    $set('price', null);
                                 }
                             }),
 
@@ -90,6 +89,9 @@ class BookingResource extends Resource
                                         $discountId = $get('discount_id');
                                         $finalPrice = self::calculateFinalPrice($basePrice, $ticketType, $discountId);
                                         $set('price', $finalPrice);
+
+                                        // Load seat layout for the bus
+                                        self::loadBusSeatLayout($trip->bus_id, $get('date'), $set);
                                     }
                                 }
                             }),
@@ -99,14 +101,12 @@ class BookingResource extends Resource
                             ->required()
                             ->reactive()
                             ->afterStateUpdated(function (callable $get, callable $set) {
-                                $routeId = $get('route_id');
+                                $busId = $get('bus_id');
+                                $date = $get('date');
 
-                                if ($routeId) {
-                                    $availableDates = BookingResource::getAvailableDates($routeId);
-                                    $set('available_dates', $availableDates);
-
-                                    $buses = BookingResource::searchBuses($routeId, $get('date'));
-                                    $set('buses', $buses->toArray());
+                                if ($busId && $date) {
+                                    // Reload seat layout with the new date
+                                    self::loadBusSeatLayout($busId, $date, $set);
                                 }
                             })
                             ->disabledDates(function (callable $get) {
@@ -131,119 +131,65 @@ class BookingResource extends Resource
                             ->native(false),
                     ]),
 
-                Grid::make()
-                    ->schema([
-                        Select::make('bus_id')
-                            ->label('Виберіть автобус:')
-                            ->options(function (callable $get) {
-                                $buses = $get('buses');
-                                if ($buses) {
-                                    return collect($buses)->pluck('name', 'id');
-                                }
-                                return [];
-                            })
-                            ->reactive()
-                            ->required()
-                            ->afterStateUpdated(function (callable $get, callable $set) {
-                                $busId = $get('bus_id');
-                                $selectedDate = $get('date');
-                                Log::info('Bus ID selected', ['bus_id' => $busId, 'selected_date' => $selectedDate]);
+                // Bus selection
+                Select::make('bus_id')
+                    ->label('Виберіть автобус:')
+                    ->options(function (callable $get) {
+                        $routeId = $get('route_id');
+                        $date = $get('date');
 
-                                if ($busId && $busId !== $get('previous_bus_id')) {
-                                    $set('previous_bus_id', $busId);
-                                    $bus = Bus::find($busId);
-                                    if ($bus) {
-                                        Log::info('Bus found', ['bus' => $bus->toArray()]);
-                                        if ($bus && is_array($bus->seat_layout)) {
-                                            // Отримання всіх заброньованих місць для обраного автобуса та дати
-                                            $bookings = Booking::where('bus_id', $busId)
-                                                ->whereDate('date', $selectedDate)
-                                                ->get()
-                                                ->pluck('seat_number')
-                                                ->toArray();
-                                            Log::info('Booked seats retrieved', ['booked_seats' => $bookings]);
+                        if ($routeId && $date) {
+                            $buses = BookingResource::searchBuses($routeId, $date);
+                            return $buses->pluck('name', 'id');
+                        }
 
-                                            // Додавання інформації про заброньовані місця
-                                            $seatLayout = collect($bus->seat_layout)->map(function ($seat) use ($bookings) {
-                                                if (isset($seat['number']) && in_array($seat['number'], $bookings)) {
-                                                    $seat['is_reserved'] = true;
-                                                } else {
-                                                    $seat['is_reserved'] = false;
-                                                }
-                                                return $seat;
-                                            })->toArray();
-
-                                            $set('seat_layout', $seatLayout);
-
-                                            Log::info('Seat layout updated with reserved status', ['seat_layout' => $seatLayout]);
-                                        } else {
-                                            $set('seat_layout', []);
-                                            Log::warning('Seat layout is not available or is not an array');
-                                        }
-                                    } else {
-                                        Log::info('Bus not found', ['bus_id' => $busId]);
-                                    }
-                                }
-                            }),
-
-                         Livewire::make('App\Http\Livewire\SeatSelector')
-                             ->label('Вибір місць')
-                             ->key('SeatSelector')
-                             ->reactive()
-                             ->statePath('seat_layout')
-                             ->afterStateUpdated(function (callable $get, callable $set) {
-                                 Log::info('Livewire seat_layout updated', ['seat_layout' => $get('seat_layout')]);
-                             })
-                             ->dehydrated(fn($state) => filled($state)),
-                    ]),
-
-
-//                Forms\Components\Placeholder::make('seat_layout')
-//                    ->label('Вибір місць')
-//                    ->content(function ($state) {
-//                        if ($state) {
-//                            return view('livewire.seat-selector', ['state' => $state]);
-//                        }
-//                        return 'No seat layout available';
-//                    })
-//                    ->reactive()
-//                    ->live()
-//                    ->afterStateUpdated(function ($state, callable $set) {
-//                        if ($state) {
-//                            Log::info('Livewire afterStateUpdated', ['$state' => $state]);
-//                            $set('price', $state['seatPrice'] ?? 0);
-//                        }
-//                    }),
-
-//                Livewire::make('App\Http\Livewire\SeatSelector')
-//                    ->label('Вибір місць')
-//                    ->key('SeatSelector')
-//                    ->reactive()
-//                    ->statePath('seat_layout')
-//                    ->dehydrated(fn($state) => filled($state))
-//                    ->afterStateUpdated(function (callable $get, callable $set) {
-//                        Log::info('Livewire seat_layout updated', ['seat_layout' => $get('seat_layout')]);
-//                    }),
-
-//                Forms\Components\View::make('livewire.seat-selector')
-//                    ->label('Вибір місць')
-//                    ->statePath('seat_layout')
-//                    ->reactive()
-//                    ->afterStateUpdated(function ($state, callable $set) {
-//                        Log::info('Livewire seat_layout updated', ['seat_layout' => $state]);
-//                    }),
-
-
-                TextInput::make('selected_seat')
-                    ->label('Вибране місце')
-                    ->required()
+                        return [];
+                    })
                     ->reactive()
-                    ->afterStateUpdated(function ($state, Set $set) {
-                        if ($state) {
-                            // Оновлення стану ціни на основі вибраного місця
-                            $set('price', $state['seatPrice']);
+                    ->required()
+                    ->afterStateUpdated(function (callable $get, callable $set) {
+                        $busId = $get('bus_id');
+                        $date = $get('date');
+
+                        if ($busId && $date) {
+                            // Load seat layout for the selected bus
+                            self::loadBusSeatLayout($busId, $date, $set);
                         }
                     }),
+
+                // Hidden field to store seat layout JSON
+                Hidden::make('seat_layout')
+                    ->id('seat_layout')
+                    ->default('[]')
+                    ->reactive(),
+
+                // Component for seat selection
+                Forms\Components\Section::make('Вибір місць')
+                    ->schema([
+                        Livewire::make('App\Http\Livewire\SeatSelector')
+                            ->statePath('data.seat_layout')
+                            ->reactive()
+                    ])
+                    ->columns(1),
+
+                Hidden::make('selected_seat')
+                    ->id('selected_seat')
+                    ->statePath('selected_seat')
+                    ->reactive(),
+
+//                Hidden::make('selected_seat')
+//                    ->id('selected_seat')
+//                    ->statePath('data.data.selected_seat')
+//                    ->reactive()
+//                    ->extraAttributes([
+//                        'wire:model.defer' => 'data.data.selected_seat',
+//                    ]),
+
+                Hidden::make('seat_number')
+                    ->id('seat_number')
+                    ->default(fn (callable $get) => $get('selected_seat'))
+                    ->dehydrated(fn ($state) => !empty($state))
+                    ->reactive(),
 
                 Select::make('ticket_type')
                     ->label('Тип квитка')
@@ -251,6 +197,7 @@ class BookingResource extends Resource
                         'adult' => 'Дорослий',
                         'child' => 'Дитячий',
                     ])
+                    ->default('adult')
                     ->required()
                     ->reactive()
                     ->afterStateUpdated(function (callable $get, callable $set) {
@@ -282,13 +229,12 @@ class BookingResource extends Resource
                     ->numeric()
                     ->reactive(),
 
-                TextInput::make('base_price')
-                    ->label('Базова ціна')
-                    ->hidden()
-                    ->required()
-                    ->numeric(),
+                Hidden::make('base_price')
+                    ->required(),
 
-                Grid::make()
+                Grid::make([
+                    'default' => 1,
+                ])
                     ->schema([
                         Repeater::make('passengers')
                             ->label('Дані пасажирів')
@@ -310,11 +256,102 @@ class BookingResource extends Resource
                             ->minItems(1)
                             ->columns(2),
                     ]),
-            ]);
+            ])
+            ->statePath('data')
+            ->model(Booking::class);
     }
 
     /**
-     * Метод для отримання доступних дат для рейсу
+     * Load seat layout for a bus and update the form
+     */
+
+    public static function loadBusSeatLayout($busId, $date, $set)
+    {
+        if (!$busId || !$date) {
+            return;
+        }
+
+        $bus = Bus::find($busId);
+        if (!$bus || !is_array($bus->seat_layout)) {
+            $set('seat_layout', json_encode([]));
+            return;
+        }
+
+        // Отримуємо бронювання для цього автобуса на задану дату
+        $bookings = Booking::where('bus_id', $busId)
+            ->whereDate('date', $date)
+            ->get()
+            ->pluck('seat_number')
+            ->toArray();
+
+        // Позначаємо заброньовані місця
+        $seatLayout = collect($bus->seat_layout)->map(function ($seat) use ($bookings) {
+            $seat['is_reserved'] = isset($seat['number']) && in_array($seat['number'], $bookings);
+            return $seat;
+        })->toArray();
+
+        $seatLayoutJson = json_encode($seatLayout);
+
+        if (json_last_error() === JSON_ERROR_NONE) {
+            $set('seat_layout', $seatLayoutJson);
+            Log::info('Set seat_layout in form state (final)', ['json' => $seatLayoutJson]);
+            // Видаляємо виклик dispatchBrowserEvent тут!
+        } else {
+            Log::error('JSON Encode Error in loadBusSeatLayout (final)', ['error' => json_last_error_msg()]);
+            $set('seat_layout', '[]');
+        }
+
+        // Скидаємо вибір місця
+        $set('selected_seat', null);
+    }
+
+//    public static function loadBusSeatLayout($busId, $date, $set)
+//    {
+//        if (!$busId || !$date) {
+//            return;
+//        }
+//
+//        $bus = Bus::find($busId);
+//        if (!$bus || !is_array($bus->seat_layout)) {
+//            $set('seat_layout', json_encode([]));
+//            return;
+//        }
+//
+//        // Get bookings for this bus on this date to mark reserved seats
+//        $bookings = Booking::where('bus_id', $busId)
+//            ->whereDate('date', $date)
+//            ->get()
+//            ->pluck('seat_number')
+//            ->toArray();
+//
+//        // Mark reserved seats in the layout
+//        $seatLayout = collect($bus->seat_layout)->map(function ($seat) use ($bookings) {
+//            $seat['is_reserved'] = isset($seat['number']) && in_array($seat['number'], $bookings);
+//            return $seat;
+//        })->toArray();
+//
+//        // Update the form state
+////        $set('seat_layout', (array)json_encode($seatLayout));
+////        Log::info('seat_layout_1', (array)json_encode($seatLayout));
+////        dispatchBrowserEvent('seat-layout-updated');
+//
+//        // У BookingResource::loadBusSeatLayout()
+//        $seatLayoutJson = json_encode($seatLayout);
+//        if (json_last_error() !== JSON_ERROR_NONE) {
+//            Log::error('JSON Encode Error in loadBusSeatLayout', ['error' => json_last_error_msg()]);
+//            $set('seat_layout', '[]'); // Встановлюємо порожній JSON масив у разі помилки
+//        } else {
+//            $set('seat_layout', $seatLayoutJson);
+//            Log::info('Set seat_layout in form state', ['json' => $seatLayoutJson]); // Логуємо валідний JSON
+//        }
+//// Важливо: Переконайтеся, що $seatLayout - це дійсно масив перед json_encode
+//
+//        // Reset selected seat
+//        $set('selected_seat', null);
+//    }
+
+    /**
+     * Get available dates for a route
      */
     public static function getAvailableDates($routeId)
     {
@@ -325,18 +362,18 @@ class BookingResource extends Resource
             $weeklyDays = is_string($bus->weekly_operation_days) ? json_decode($bus->weekly_operation_days, true) : $bus->weekly_operation_days;
             $operationDays = is_string($bus->operation_days) ? json_decode($bus->operation_days, true) : $bus->operation_days;
 
-            // Додаємо дні тижня
+            // Add weekly days
             if (is_array($weeklyDays)) {
                 foreach ($weeklyDays as $day) {
                     $dayOfWeek = Carbon::parse($day)->dayOfWeek;
-                    for ($i = 0; $i < 4; $i++) { // Наступні 4 тижні
+                    for ($i = 0; $i < 4; $i++) {
                         $nextAvailableDate = Carbon::now()->next($dayOfWeek)->addWeeks($i);
                         $availableDates[] = $nextAvailableDate->format('Y-m-d');
                     }
                 }
             }
 
-            // Додаємо окремі дати, якщо є
+            // Add specific operation days
             if (is_array($operationDays)) {
                 $availableDates = array_merge($availableDates, $operationDays);
             }
@@ -349,15 +386,23 @@ class BookingResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
-                    ->label('Назва автобуса')
+                Tables\Columns\TextColumn::make('user.name')
+                    ->label('Користувач')
                     ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('registration_number')
-                    ->label('Номер')
+                Tables\Columns\TextColumn::make('trip.bus.name')
+                    ->label('Автобус')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('available_seats')
-                    ->label('Доступно сидінь')
+                Tables\Columns\TextColumn::make('date')
+                    ->label('Дата поїздки')
+                    ->date('d.m.Y')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('selected_seat')
+                    ->label('Місце')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('price')
+                    ->label('Ціна')
+                    ->money('UAH')
                     ->sortable(),
             ]);
     }
@@ -367,16 +412,16 @@ class BookingResource extends Resource
         return [
             'index' => Pages\ListBookings::route('/'),
             'create' => Pages\CreateBooking::route('/create'),
-            'view' => Pages\ViewSeats::route('/{bus}/seats'),
+            'edit' => Pages\EditBooking::route('/{record}/edit'),
         ];
     }
 
     public static function searchBuses($routeId, $date)
     {
-        // Форматуємо дату для перевірки дня тижня
+        // Format date to check day of week
         $dayOfWeek = date('l', strtotime($date));
 
-        // Шукаємо автобуси по заданому маршруту, які їздять по заданому дню тижня
+        // Find buses for the route that operate on this day
         $buses = Bus::where('route_id', $routeId)
             ->where(function ($query) use ($dayOfWeek, $date) {
                 $query->whereJsonContains('weekly_operation_days', $dayOfWeek)
@@ -387,17 +432,20 @@ class BookingResource extends Resource
         return $buses;
     }
 
+    /**
+     * Calculate final price based on ticket type and discounts
+     */
     private static function calculateFinalPrice($basePrice, $ticketType, $discountId)
     {
         if (!$basePrice) {
             return 0;
         }
 
-        // Застосувати тип квитка (дитячий квиток має знижку 20%)
+        // Apply ticket type (child ticket has 20% discount)
         $ticketTypeDiscount = $ticketType === 'child' ? 0.8 : 1.0;
         $finalPrice = $basePrice * $ticketTypeDiscount;
 
-        // Застосувати знижку
+        // Apply discount
         if ($discountId) {
             $discount = Discount::find($discountId);
             if ($discount) {
@@ -405,57 +453,30 @@ class BookingResource extends Resource
             }
         }
 
-        return max($finalPrice, 0);
+        return max(round($finalPrice, 2), 0);
     }
 
-    protected static function getListeners(): array
-    {
-        return [
-            'handleSeatSelected' => 'handleSeatSelected',
-        ];
-    }
-
-//    public function handleSeatSelected($seatNumber, $seatPrice)
+//    /**
+//     * Define Livewire listeners for the component
+//     */
+//    public static function getListeners()
 //    {
-//        Log::info('handleSeatSelected викликано', ['seatNumber' => $seatNumber, 'seatPrice' => $seatPrice]);
+//        return [
+//            'seatSelected' => 'handleSeatSelected',
+//        ];
+//    }
 //
-//        // Оновлюємо значення обраного місця та ціну.
-//        $this->form->fill([
-//            'selected_seat' => $seatNumber,
-//            'price' => $seatPrice,
-//        ]);
-//    }
-
-    public function handleUpdateParentState($data)
-    {
-        Log::info('handleUpdateParentState викликано', $data);
-        $this->form->fill($data);
-    }
-
-
-    // Додаємо Livewire метод для встановлення обраного місця та ціни
-//    public static function setSelectedSeat($seatNumber, $seatPrice)
+//    /**
+//     * Handle seat selection from Livewire component
+//     */
+//    public function handleSeatSelected($data)
 //    {
-//        self::fill([
-//            'selected_seat' => $seatNumber,
-//            'price' => $seatPrice,
+//        Log::info('Seat selected in Filament form', $data);
+//
+//        // Update the form with the selected seat data
+//        $this->form->fill([
+//            'selected_seat' => $data['seatNumber'],
+//            'price' => $data['seatPrice'],
 //        ]);
 //    }
-
-    public function handleSeatSelected($seatNumber, $seatPrice) : void
-    {
-        Log::info('Метод handleSeatSelected викликано', ['seatNumber' => $seatNumber, 'seatPrice' => $seatPrice]);
-
-        // Перевірка стану перед оновленням
-        Log::info('Стан форми перед оновленням', $this->form->getState());
-
-        // Оновлюємо значення обраного місця та ціни.
-        $this->form->fill([
-            'selected_seat' => $seatNumber,
-            'price' => $seatPrice,
-        ]);
-
-        // Перевірка стану після оновлення
-        Log::info('Стан форми після оновлення', $this->form->getState());
-    }
 }

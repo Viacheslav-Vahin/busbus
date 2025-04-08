@@ -185,7 +185,7 @@ return [
     */
 
     'themes' => [
-        'default' => 'dark', // Вкажіть 'dark' для темної теми
+        'default' => 'light', // Вкажіть 'dark' для темної теми
     ],
 
     /*
@@ -198,6 +198,8 @@ return [
     */
 
     'resources_directory' => app_path('Filament/Resources'),
+
+    'layouts_directory' => app_path('Filament/Layouts'),
 
     'layout' => [
         'sidebar' => [

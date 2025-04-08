@@ -1,7 +1,7 @@
 version: '3.7'
 services:
     app:
-        image: laravelphp/lara...
+        image: laravelphp
         container_name: bus_booking_app
         working_dir: /var/www/html
         volumes:

@@ -24,7 +24,6 @@ class Booking extends Model
         'bus_id',
         'route_id',
         'destination_id',
-        'seat_number',
         'selected_seat',
         'date',
         'passengers',
