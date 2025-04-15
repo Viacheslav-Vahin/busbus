@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Filament\Resources;
 
 //use Livewire\Livewire;
@@ -8,6 +9,7 @@ use App\Models\Bus;
 use App\Models\Route;
 use App\Models\Trip;
 use App\Models\Discount;
+use App\Models\AdditionalService;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -165,6 +167,7 @@ class BookingResource extends Resource
 
                 // Component for seat selection
                 Forms\Components\Section::make('Вибір місць')
+                    ->aside()
                     ->schema([
                         Livewire::make('App\Http\Livewire\SeatSelector')
                             ->statePath('data.seat_layout')
@@ -174,21 +177,17 @@ class BookingResource extends Resource
 
                 Hidden::make('selected_seat')
                     ->id('selected_seat')
-                    ->statePath('selected_seat')
+                    ->statePath('data.selected_seat')
                     ->reactive(),
 
-//                Hidden::make('selected_seat')
-//                    ->id('selected_seat')
-//                    ->statePath('data.data.selected_seat')
-//                    ->reactive()
-//                    ->extraAttributes([
-//                        'wire:model.defer' => 'data.data.selected_seat',
-//                    ]),
+                Hidden::make('seat_price')
+                    ->id('seat_price')
+                    ->reactive(),
 
                 Hidden::make('seat_number')
                     ->id('seat_number')
-                    ->default(fn (callable $get) => $get('selected_seat'))
-                    ->dehydrated(fn ($state) => !empty($state))
+                    ->default(fn(callable $get) => $get('selected_seat'))
+                    ->dehydrated(fn($state) => !empty($state))
                     ->reactive(),
 
                 Select::make('ticket_type')
@@ -201,26 +200,75 @@ class BookingResource extends Resource
                     ->required()
                     ->reactive()
                     ->afterStateUpdated(function (callable $get, callable $set) {
-                        $basePrice = $get('base_price');
-                        $ticketType = $get('ticket_type');
-                        $discountId = $get('discount_id');
+                        $seatPrice = $get('seat_price') ?? null;
 
-                        $finalPrice = self::calculateFinalPrice($basePrice, $ticketType, $discountId);
-                        $set('price', $finalPrice);
+                        if ($seatPrice) {
+                            // Якщо обрано місце з визначеною ціною, то беремо саме її як фінальну.
+                            $finalTicketPrice = $seatPrice;
+                        } else {
+                            // Якщо ціна місця не задана, використовуємо базову логіку розрахунку:
+                            $basePrice = $get('base_price') ?? 0;
+                            $ticketType = $get('ticket_type') ?? 'adult';
+                            $discountId = $get('discount_id');
+                            $finalTicketPrice = self::calculateTotalPrice($basePrice, $ticketType, $discountId);
+                        }
+                        // Додаємо вартість додаткових послуг
+                        $selectedServices = $get('additional_services') ?? [];
+                        $servicesTotal = \App\Models\AdditionalService::whereIn('id', $selectedServices)->sum('price');
+                        $newPrice = $finalTicketPrice + $servicesTotal;
+                        $set('price', $newPrice);
                     }),
+
 
                 Select::make('discount_id')
                     ->label('Знижка')
-                    ->options(Discount::all()->pluck('name', 'id'))
+                    ->options(\App\Models\Discount::all()->pluck('name', 'id'))
                     ->nullable()
                     ->reactive()
                     ->afterStateUpdated(function (callable $get, callable $set) {
-                        $basePrice = $get('base_price');
-                        $ticketType = $get('ticket_type');
-                        $discountId = $get('discount_id');
+                        $seatPrice = $get('seat_price') ?? null;
 
-                        $finalPrice = self::calculateFinalPrice($basePrice, $ticketType, $discountId);
-                        $set('price', $finalPrice);
+                        if ($seatPrice) {
+                            // Якщо обрано місце з визначеною ціною, то беремо саме її як фінальну.
+                            $finalTicketPrice = $seatPrice;
+                        } else {
+                            // Якщо ціна місця не задана, використовуємо базову логіку розрахунку:
+                            $basePrice = $get('base_price') ?? 0;
+                            $ticketType = $get('ticket_type') ?? 'adult';
+                            $discountId = $get('discount_id');
+                            $finalTicketPrice = self::calculateTotalPrice($basePrice, $ticketType, $discountId);
+                        }
+                        // Додаємо вартість додаткових послуг
+                        $selectedServices = $get('additional_services') ?? [];
+                        $servicesTotal = \App\Models\AdditionalService::whereIn('id', $selectedServices)->sum('price');
+                        $newPrice = $finalTicketPrice + $servicesTotal;
+                        $set('price', $newPrice);
+                    }),
+
+                // Додаткові послуги
+                Forms\Components\CheckboxList::make('additional_services')
+                    ->label('Додаткові послуги')
+                    ->options(\App\Models\AdditionalService::all()->pluck('name', 'id'))
+                    ->helperText('Виберіть послуги, які бажаєте додати. Їхня вартість буде додана до загальної суми.')
+                    ->reactive()
+                    ->afterStateUpdated(function (callable $get, callable $set) {
+                        $seatPrice = $get('seat_price') ?? null;
+
+                        if ($seatPrice) {
+                            // Якщо обрано місце з визначеною ціною, то беремо саме її як фінальну.
+                            $finalTicketPrice = $seatPrice;
+                        } else {
+                            // Якщо ціна місця не задана, використовуємо базову логіку розрахунку:
+                            $basePrice = $get('base_price') ?? 0;
+                            $ticketType = $get('ticket_type') ?? 'adult';
+                            $discountId = $get('discount_id');
+                            $finalTicketPrice = self::calculateTotalPrice($basePrice, $ticketType, $discountId);
+                        }
+                        // Додаємо вартість додаткових послуг
+                        $selectedServices = $get('additional_services') ?? [];
+                        $servicesTotal = \App\Models\AdditionalService::whereIn('id', $selectedServices)->sum('price');
+                        $newPrice = $finalTicketPrice + $servicesTotal;
+                        $set('price', $newPrice);
                     }),
 
                 TextInput::make('price')
@@ -305,51 +353,6 @@ class BookingResource extends Resource
         $set('selected_seat', null);
     }
 
-//    public static function loadBusSeatLayout($busId, $date, $set)
-//    {
-//        if (!$busId || !$date) {
-//            return;
-//        }
-//
-//        $bus = Bus::find($busId);
-//        if (!$bus || !is_array($bus->seat_layout)) {
-//            $set('seat_layout', json_encode([]));
-//            return;
-//        }
-//
-//        // Get bookings for this bus on this date to mark reserved seats
-//        $bookings = Booking::where('bus_id', $busId)
-//            ->whereDate('date', $date)
-//            ->get()
-//            ->pluck('seat_number')
-//            ->toArray();
-//
-//        // Mark reserved seats in the layout
-//        $seatLayout = collect($bus->seat_layout)->map(function ($seat) use ($bookings) {
-//            $seat['is_reserved'] = isset($seat['number']) && in_array($seat['number'], $bookings);
-//            return $seat;
-//        })->toArray();
-//
-//        // Update the form state
-////        $set('seat_layout', (array)json_encode($seatLayout));
-////        Log::info('seat_layout_1', (array)json_encode($seatLayout));
-////        dispatchBrowserEvent('seat-layout-updated');
-//
-//        // У BookingResource::loadBusSeatLayout()
-//        $seatLayoutJson = json_encode($seatLayout);
-//        if (json_last_error() !== JSON_ERROR_NONE) {
-//            Log::error('JSON Encode Error in loadBusSeatLayout', ['error' => json_last_error_msg()]);
-//            $set('seat_layout', '[]'); // Встановлюємо порожній JSON масив у разі помилки
-//        } else {
-//            $set('seat_layout', $seatLayoutJson);
-//            Log::info('Set seat_layout in form state', ['json' => $seatLayoutJson]); // Логуємо валідний JSON
-//        }
-//// Важливо: Переконайтеся, що $seatLayout - це дійсно масив перед json_encode
-//
-//        // Reset selected seat
-//        $set('selected_seat', null);
-//    }
-
     /**
      * Get available dates for a route
      */
@@ -386,12 +389,23 @@ class BookingResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('user.name')
+                Tables\Columns\TextColumn::make('passengerNames')
                     ->label('Користувач')
                     ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('trip.bus.name')
-                    ->label('Автобус')
+                Tables\Columns\TextColumn::make('passengerPhone')
+                    ->label('телефон')
+                    ->sortable()
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('passengerEmail')
+                    ->label('Пошта')
+                    ->sortable()
+                    ->searchable(),
+//                Tables\Columns\TextColumn::make('trip.bus.name')
+//                    ->label('Автобус')
+//                    ->sortable(),
+                Tables\Columns\TextColumn::make('route_display')
+                    ->label('Рейс')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('date')
                     ->label('Дата поїздки')
@@ -404,6 +418,9 @@ class BookingResource extends Resource
                     ->label('Ціна')
                     ->money('UAH')
                     ->sortable(),
+                Tables\Columns\TextColumn::make('passengerNote')
+                    ->label('Коментар')
+                    ->searchable(),
             ]);
     }
 
@@ -456,27 +473,19 @@ class BookingResource extends Resource
         return max(round($finalPrice, 2), 0);
     }
 
-//    /**
-//     * Define Livewire listeners for the component
-//     */
-//    public static function getListeners()
-//    {
-//        return [
-//            'seatSelected' => 'handleSeatSelected',
-//        ];
-//    }
-//
-//    /**
-//     * Handle seat selection from Livewire component
-//     */
-//    public function handleSeatSelected($data)
-//    {
-//        Log::info('Seat selected in Filament form', $data);
-//
-//        // Update the form with the selected seat data
-//        $this->form->fill([
-//            'selected_seat' => $data['seatNumber'],
-//            'price' => $data['seatPrice'],
-//        ]);
-//    }
+    private static function calculateTotalPrice($effectivePrice, $ticketType, $discountId, $additionalServiceIds = [])
+    {
+        // Обчислюємо фінальну ціну квитка з урахуванням типу та знижки на ефективну ціну
+        $finalPrice = self::calculateFinalPrice($effectivePrice, $ticketType, $discountId);
+
+        // Додаємо вартість вибраних додаткових послуг
+        $servicesTotal = 0;
+        if (!empty($additionalServiceIds)) {
+            $servicesTotal = \App\Models\AdditionalService::whereIn('id', $additionalServiceIds)->sum('price');
+        }
+
+        return $finalPrice + $servicesTotal;
+    }
+
+
 }

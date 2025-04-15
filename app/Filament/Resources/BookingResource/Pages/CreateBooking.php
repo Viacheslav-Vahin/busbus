@@ -60,6 +60,7 @@ class CreateBooking extends CreateRecord
         $currentState['selected_seat'] = $data['seatNumber'];
         $currentState['seat_number'] = $data['seatNumber'];
         $currentState['price'] = $data['seatPrice'];
+        $currentState['seat_price'] = $data['seatPrice'];
 
 //        \Log::info('$currentState selected_seat', [$currentState['selected_seat']]);
 //        \Log::info('$currentState seat_number', [$currentState['seat_number']]);

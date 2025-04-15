@@ -62,7 +62,9 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsPlugin::make())
             ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsPlugin::make()->allowGPTScan())
-            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsSwitcherPlugin::make());
+            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsSwitcherPlugin::make())
+            ->sidebarCollapsibleOnDesktop();
+
     }
 
 }

@@ -11,13 +11,23 @@
         @endif
     </div>
 
-    <div class="seat-layout grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
-    @if(!empty($seats))
+    <div class='seat-layout' style="
+         display: grid;
+         gap: 10px;
+         grid-template-rows: repeat({{collect($seats)->pluck('row')->max() ?? 3}}, auto);
+         grid-template-columns: repeat({{collect($seats)->pluck('column')->max() ?? 3}}, 1fr);
+         ">
+        @if(!empty($seats))
             @foreach($seats as $index => $seat)
                 @if($seat['type'] === 'seat')
                     <div
                         wire:key="seat-{{ $index }}"
-                        class="seat relative p-3 text-center border rounded-t-lg {{ isset($seat['is_reserved']) && $seat['is_reserved'] ? 'bg-gray-300 cursor-not-allowed' : 'bg-green-100 hover:bg-green-200 cursor-pointer' }} {{ $selectedSeat == $seat['number'] ? 'bg-green-500 text-white' : '' }} {{ $selectedSeat == $seat['number'] ? 'selected' : '' }}"
+                        style="grid-row: {{ $seat['row'] }}; grid-column: {{ $seat['column'] }};"
+                        class="seat relative p-3 text-center border rounded-t-lg  grid-row: {{ $seat['row'] }};
+                grid-column: {{ $seat['column'] }};
+                position: relative;
+                border: 2.5px solid #ccc;
+                border-radius: 18px 18px 6px 6px; {{ isset($seat['is_reserved']) && $seat['is_reserved'] ? 'bg-gray-300 cursor-not-allowed' : 'bg-green-100 hover:bg-green-200 cursor-pointer' }} {{ $selectedSeat == $seat['number'] ? 'bg-green-500 text-white' : '' }} {{ $selectedSeat == $seat['number'] ? 'selected' : '' }}"
                         @if(!isset($seat['is_reserved']) || !$seat['is_reserved'])
                             wire:click="selectSeat('{{ $seat['number'] }}', {{ $seat['price'] ?? 0 }})"
                         @endif
@@ -27,25 +37,24 @@
                             <span class="text-xs block">{{ $seat['price'] }} грн</span>
                         @endif
                     </div>
-
-{{--                    <div wire:click="selectSeat('{{ $seat['number'] }}', {{ $seat['price'] ?? 0 }})"--}}
-{{--                         class="seat {{ $selectedSeat == $seat['number'] ? 'selected' : '' }}">--}}
-{{--                        {{ $seat['number'] ?? 'N/A' }}--}}
-{{--                    </div>  --}}
                 @elseif($seat['type'] === 'driver')
-                    <div class="driver relative p-3 text-center bg-blue-100 border rounded-t-lg">
+                    <div class="driver relative p-3 text-center bg-blue-100 border rounded-t-lg"
+                         style="grid-row: {{ $seat['row'] }}; grid-column: {{ $seat['column'] }};">
                         <span class="block">Водій</span>
                     </div>
                 @elseif($seat['type'] === 'wc')
-                    <div class="wc relative p-3 text-center bg-purple-100 border rounded-t-lg">
+                    <div class="wc relative p-3 text-center bg-purple-100 border rounded-t-lg"
+                         style="grid-row: {{ $seat['row'] }}; grid-column: {{ $seat['column'] }};">
                         <span class="block">WC</span>
                     </div>
                 @elseif($seat['type'] === 'coffee')
-                    <div class="coffee relative p-3 text-center bg-yellow-100 border rounded-t-lg">
+                    <div class="coffee relative p-3 text-center bg-yellow-100 border rounded-t-lg"
+                         style="grid-row: {{ $seat['row'] }}; grid-column: {{ $seat['column'] }};">
                         <span class="block">Кава</span>
                     </div>
                 @elseif($seat['type'] === 'stuardesa')
-                    <div class="stuardesa relative p-3 text-center bg-pink-100 border rounded-t-lg">
+                    <div class="stuardesa relative p-3 text-center bg-pink-100 border rounded-t-lg"
+                         style="grid-row: {{ $seat['row'] }}; grid-column: {{ $seat['column'] }};">
                         <span class="block">Стюардеса</span>
                     </div>
                 @else
@@ -53,22 +62,20 @@
                 @endif
             @endforeach
         @else
-            <div class="col-span-full p-4 border rounded text-center bg-gray-50">
+            <div class="h-select-seats col-span-full p-4 border rounded text-center bg-gray-50">
                 Виберіть автобус, щоб побачити схему місць
             </div>
         @endif
     </div>
     <input type="hidden" wire:model.defer="selectedSeat" id="selected_seat">
 
-    {{--    <input type="hidden" wire:model.defer="seatNumber">--}}
-
-
     {{-- Стилі для схеми автобуса --}}
     <style>
         .seat-layout {
-            display: flex;
-            flex-wrap: wrap;
-            width: 300px;
+            /*display: flex;*/
+            /*flex-wrap: wrap;*/
+            width: 100%;
+            min-width: 300px;
         }
 
         .seat:after, .driver:after, .wc:after, .coffee:after {
@@ -83,7 +90,7 @@
         }
 
         .seat, .driver, .wc, .coffee {
-            width: 25%;
+            /*width: calc(25% - 10px);*/
             padding: 10px;
             padding-bottom: 15px;
             margin: 5px;
@@ -112,12 +119,11 @@
             border-radius: 18px 18px 6px 6px;
             color: white;
         }
+
+        .h-select-seats {
+            color: #000000;
+        }
     </style>
-    {{-- Вставляємо Livewire скрипти --}}
-{{--    @filamentStyles--}}
-{{--    @filamentScripts--}}
-{{--    @livewireScripts--}}
-{{--    @livewireStyles--}}
 </div>
 
 

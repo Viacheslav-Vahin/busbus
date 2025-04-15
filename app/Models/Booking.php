@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
 
 class Booking extends Model
 {
@@ -42,9 +43,69 @@ class Booking extends Model
 
     public function calculatePrice($adultTickets, $childTickets)
     {
-        // Приклад обчислення з урахуванням знижок для дітей
-        $adultPrice = $this->route->ticket_price; // Використовуємо ціну маршруту
-        $childDiscount = 0.5; // 50% знижка для дітей
+        $adultPrice = $this->route->ticket_price;
+        $childDiscount = 0.5;
         return ($adultTickets * $adultPrice) + ($childTickets * $adultPrice * $childDiscount);
+    }
+
+    public function getPassengerNamesAttribute(): string
+    {
+        $passengers = $this->passengers;
+
+        if (is_string($passengers)) {
+            $passengers = json_decode($passengers, true) ?: [];
+        }
+
+        return collect($passengers)
+            ->pluck('name')
+            ->implode(', ');
+    }
+    public function getPassengerNoteAttribute(): string
+    {
+        $passengers = $this->passengers;
+
+        if (is_string($passengers)) {
+            $passengers = json_decode($passengers, true) ?: [];
+        }
+
+        return collect($passengers)
+            ->pluck('note')
+            ->implode(', ');
+    }
+    public function getPassengerPhoneAttribute(): string
+    {
+        $passengers = $this->passengers;
+
+        if (is_string($passengers)) {
+            $passengers = json_decode($passengers, true) ?: [];
+        }
+
+        return collect($passengers)
+            ->pluck('phone_number')
+            ->implode(', ');
+    }
+    public function getPassengerEmailAttribute(): string
+    {
+        $passengers = $this->passengers;
+
+        if (is_string($passengers)) {
+            $passengers = json_decode($passengers, true) ?: [];
+        }
+
+        return collect($passengers)
+            ->pluck('email')
+            ->implode(', ');
+    }
+    public function route()
+    {
+        return $this->belongsTo(\App\Models\Route::class, 'route_id');
+    }
+
+    public function getRouteDisplayAttribute(): string
+    {
+        if ($this->route) {
+            return $this->route->start_point . ' - ' . $this->route->end_point;
+        }
+        return 'N/A';
     }
 }
