@@ -9,6 +9,7 @@ use App\Models\Bus;
 use App\Models\Route;
 use App\Models\Trip;
 use App\Models\Discount;
+use App\Models\GlobalAccount;
 use App\Models\AdditionalService;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -203,16 +204,16 @@ class BookingResource extends Resource
                         $seatPrice = $get('seat_price') ?? null;
 
                         if ($seatPrice) {
-                            // Якщо обрано місце з визначеною ціною, то беремо саме її як фінальну.
-                            $finalTicketPrice = $seatPrice;
+                            // Якщо обране місце має свою ціну, застосовуємо знижку для дитячих квитків
+                            $ticketType = $get('ticket_type') ?? 'adult';
+                            $finalTicketPrice = $ticketType === 'child' ? $seatPrice * 0.8 : $seatPrice;
                         } else {
-                            // Якщо ціна місця не задана, використовуємо базову логіку розрахунку:
                             $basePrice = $get('base_price') ?? 0;
                             $ticketType = $get('ticket_type') ?? 'adult';
                             $discountId = $get('discount_id');
                             $finalTicketPrice = self::calculateTotalPrice($basePrice, $ticketType, $discountId);
                         }
-                        // Додаємо вартість додаткових послуг
+                        // Додаткові послуги додаються до фінальної ціни
                         $selectedServices = $get('additional_services') ?? [];
                         $servicesTotal = \App\Models\AdditionalService::whereIn('id', $selectedServices)->sum('price');
                         $newPrice = $finalTicketPrice + $servicesTotal;
@@ -229,16 +230,16 @@ class BookingResource extends Resource
                         $seatPrice = $get('seat_price') ?? null;
 
                         if ($seatPrice) {
-                            // Якщо обрано місце з визначеною ціною, то беремо саме її як фінальну.
-                            $finalTicketPrice = $seatPrice;
+                            // Якщо обране місце має свою ціну, застосовуємо знижку для дитячих квитків
+                            $ticketType = $get('ticket_type') ?? 'adult';
+                            $finalTicketPrice = $ticketType === 'child' ? $seatPrice * 0.8 : $seatPrice;
                         } else {
-                            // Якщо ціна місця не задана, використовуємо базову логіку розрахунку:
                             $basePrice = $get('base_price') ?? 0;
                             $ticketType = $get('ticket_type') ?? 'adult';
                             $discountId = $get('discount_id');
                             $finalTicketPrice = self::calculateTotalPrice($basePrice, $ticketType, $discountId);
                         }
-                        // Додаємо вартість додаткових послуг
+                        // Додаткові послуги додаються до фінальної ціни
                         $selectedServices = $get('additional_services') ?? [];
                         $servicesTotal = \App\Models\AdditionalService::whereIn('id', $selectedServices)->sum('price');
                         $newPrice = $finalTicketPrice + $servicesTotal;
@@ -255,16 +256,16 @@ class BookingResource extends Resource
                         $seatPrice = $get('seat_price') ?? null;
 
                         if ($seatPrice) {
-                            // Якщо обрано місце з визначеною ціною, то беремо саме її як фінальну.
-                            $finalTicketPrice = $seatPrice;
+                            // Якщо обране місце має свою ціну, застосовуємо знижку для дитячих квитків
+                            $ticketType = $get('ticket_type') ?? 'adult';
+                            $finalTicketPrice = $ticketType === 'child' ? $seatPrice * 0.8 : $seatPrice;
                         } else {
-                            // Якщо ціна місця не задана, використовуємо базову логіку розрахунку:
                             $basePrice = $get('base_price') ?? 0;
                             $ticketType = $get('ticket_type') ?? 'adult';
                             $discountId = $get('discount_id');
                             $finalTicketPrice = self::calculateTotalPrice($basePrice, $ticketType, $discountId);
                         }
-                        // Додаємо вартість додаткових послуг
+                        // Додаткові послуги додаються до фінальної ціни
                         $selectedServices = $get('additional_services') ?? [];
                         $servicesTotal = \App\Models\AdditionalService::whereIn('id', $selectedServices)->sum('price');
                         $newPrice = $finalTicketPrice + $servicesTotal;
@@ -298,6 +299,11 @@ class BookingResource extends Resource
                                     ->required(),
                                 TextInput::make('email')
                                     ->label('Електронна пошта'),
+                                TextInput::make('viber')
+                                    ->label('Viber')
+                                    ->helperText('Не обовʼязково'),
+                                TextInput::make('telegram')
+                                    ->label('Telegram'),
                                 TextInput::make('note')
                                     ->label('Примітка'),
                             ])
@@ -394,7 +400,7 @@ class BookingResource extends Resource
                     ->sortable()
                     ->searchable(),
                 Tables\Columns\TextColumn::make('passengerPhone')
-                    ->label('телефон')
+                    ->label('Телефон')
                     ->sortable()
                     ->searchable(),
                 Tables\Columns\TextColumn::make('passengerEmail')
@@ -421,6 +427,78 @@ class BookingResource extends Resource
                 Tables\Columns\TextColumn::make('passengerNote')
                     ->label('Коментар')
                     ->searchable(),
+
+            ])
+            ->actions([
+                ...GlobalAccount::all()->map(function ($account) {
+                    return Tables\Actions\Action::make('send_account_' . $account->id)
+                        ->label($account->title . ' у Viber & Telegram')
+                        ->color('info')
+                        ->action(function ($record) use ($account) {
+                            // --- Ось тут формуємо красивий меседж ---
+                            $passenger = $record->passengers[0] ?? null; // якщо їх декілька, можна вибирати іншим способом
+                            $route = $record->route_display; // або $record->route->displayName
+                            $trip = $record->trip; // отримати модель Trip, якщо треба час
+                            $bus = $record->bus; // якщо треба
+                            $accountTitle = $account->title; // реквізити
+                            $accountDetails = $account->details; // реквізити
+                            $accountTitle = $account->title;
+                            $bookingId = $record->id;
+
+                            $date = \Carbon\Carbon::parse($record->date)->format('d.m.Y');
+                            $time = $trip->departure_time ?? '12:00'; // підлаштуй якщо поле інше
+                            $seat = $record->selected_seat ?? '-';
+                            $sum = $record->price;
+                            $purpose = "Оплата за послуги бронювання $bookingId"; // можеш додати більше тексту
+
+                            $message = <<<MSG
+🔔 Продовження бронювання – важлива інформація!
+
+Просимо уважно перевірити дані вашого бронювання:
+
+🚌 Рейс: $date о $time
+📍 Маршрут: $route
+💺 Місце: №$seat
+💵 До сплати: $sum грн
+
+⸻
+
+💳 Реквізити для оплати квитка:
+
+$accountDetails
+$accountTitle
+
+📌 Призначення платежу:
+$purpose
+
+❗️ Для успішного зарахування коштів обов’язково вказуйте правильне призначення платежу.
+
+📤 Після оплати обов’язково надішліть квитанцію або скріншот про оплату у відповідь на це повідомлення.
+
+⸻
+
+ℹ️ Інформація про багаж та умови повернення квитків:
+https://maxbus.com.ua/info/
+MSG;
+
+                            // --- Viber ---
+                            \App\Services\ViberSender::sendInvoice(
+                                $passenger ? $passenger['phone_number'] : $record->passengerPhone,
+                                $message
+                            );
+
+                            // --- Telegram ---
+                            $telegramId = $passenger['telegram'] ?? $record->passengerTelegram ?? null;
+                            if ($telegramId) {
+                                \App\Services\TelegramSender::sendInvoice($telegramId, $message);
+                            }
+
+                            \Filament\Notifications\Notification::make()
+                                ->title("$accountTitle надіслано у Viber і Telegram")
+                                ->success()
+                                ->send();
+                        });
+                })->toArray(),
             ]);
     }
 

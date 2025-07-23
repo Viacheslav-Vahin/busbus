@@ -1,5 +1,5 @@
 <?php
-
+// app/Http/Controllers/RouteController
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
@@ -7,6 +7,8 @@ use App\Models\Route;
 use App\Models\Bus;
 use Illuminate\Http\Request;
 use App\Models\RouteSchedule;
+use App\Filament\Resources\BookingResource;
+
 class RouteController extends Controller
 {
     public function index()
@@ -17,7 +19,27 @@ class RouteController extends Controller
         return view('admin.routes.index', compact('routes'));
     }
 
-    public function getBusesByDate(Request $request)
+    /**
+     * API: всі маршрути (id, start_point, end_point)
+     */
+    public function apiIndex()
+    {
+        $routes = Route::select('id', 'start_point', 'end_point')->get();
+
+        return response()->json($routes);
+    }
+
+    /**
+     * API: доступні дати для обраного маршруту
+     */
+    public function availableDates($routeId)
+    {
+        // Ми можемо скористатися тим самим кодом, що і у BookingResource::getAvailableDates
+        $dates = \App\Filament\Resources\BookingResource::getAvailableDates($routeId);
+
+        return response()->json(array_values($dates));
+    }
+    public function getBusesByDate(Request $request): \Illuminate\Http\JsonResponse
     {
         $routeId = $request->input('route_id');
         $date = $request->input('date');

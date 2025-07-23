@@ -8,9 +8,10 @@ use App\Http\Controllers\BookingController;
 
 
 
-Route::get('/', function () {
-    return view('welcome');
-});
+
+//Route::get('/', function () {
+//    return view('welcome');
+//});
 Route::get('/test', function () {
     return 'Filament is working';
 });
@@ -27,3 +28,6 @@ Route::post('/get-buses-by-date', [RouteScheduleController::class, 'getBusesByDa
 //Route::get('/admin/buses/{record}/edit', [EditBus::class, 'mount'])
 //    ->name('admin.buses.edit');
 Route::post('/booking/store', [BookingController::class, 'store'])->name('booking.store');
+//Route::view('/', 'index')->name('home');
+Route::view('/', 'index');
+
