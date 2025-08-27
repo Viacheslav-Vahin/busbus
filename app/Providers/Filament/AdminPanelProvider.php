@@ -26,6 +26,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            ->authGuard('web')
             ->login()
             ->colors([
                 'primary' => Color::Amber,
@@ -60,9 +61,9 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsPlugin::make())
-            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsPlugin::make()->allowGPTScan())
-            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsSwitcherPlugin::make())
+//            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsPlugin::make())
+//            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsPlugin::make()->allowGPTScan())
+//            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsSwitcherPlugin::make())
             ->sidebarCollapsibleOnDesktop();
 
     }

@@ -1,28 +1,42 @@
 <?php
+
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class TelegramSender
 {
-    public static function sendInvoice($chatId, $message)
+    public static function sendInvoice(int|string $chatId, string $message, array $extra = []): bool
     {
-        $token = config('services.telegram.bot_token'); // Задаєш у .env
-        $url = "https://api.telegram.org/bot{$token}/sendMessage";
+        $token = config('services.telegram.bot_token');
+        if (!$token || !$chatId) {
+            Log::warning('Telegram: missing token or chat_id', compact('chatId'));
+            return false;
+        }
 
-        // Якщо хочеш додати розмітку (жирний, emoji) — використовуй MarkdownV2 або HTML
-        $payload = [
+        // HTML простіше ніж MarkdownV2
+        $payload = array_merge([
             'chat_id' => $chatId,
             'text' => $message,
-            'parse_mode' => 'MarkdownV2', // Або 'MarkdownV2'
-        ];
+            'parse_mode' => 'HTML',
+            'disable_web_page_preview' => true,
+        ], $extra);
 
-        $response = Http::post($url, $payload);
+        $resp = Http::asForm()->post("https://api.telegram.org/bot{$token}/sendMessage", $payload);
+//        $response = Http::post($url, [
+//            'chat_id' => $chatId,
+//            'text' => $message,
+//            'parse_mode' => 'HTML',
+//        ]);
+        Log::info('Telegram sendMessage', ['payload' => $payload, 'status' => $resp->status(), 'body' => $resp->json()]);
+        return $resp->ok() && ($resp->json()['ok'] ?? false);
+    }
 
-        \Log::info('Telegram invoice sent', [
-            'chat_id' => $chatId,
-            'message' => $message,
-            'response' => $response->json(),
-        ]);
+    // зручно зберігати chat_id через webhook
+    public static function setWebhook(string $url): array
+    {
+        $token = config('services.telegram.bot_token');
+        return Http::asForm()->post("https://api.telegram.org/bot{$token}/setWebhook", ['url' => $url])->json();
     }
 }

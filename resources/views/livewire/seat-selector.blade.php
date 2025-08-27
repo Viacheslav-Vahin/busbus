@@ -57,6 +57,16 @@
                          style="grid-row: {{ $seat['row'] }}; grid-column: {{ $seat['column'] }};">
                         <span class="block">Стюардеса</span>
                     </div>
+                @elseif($seat['type'] === 'stairs')
+                    <div class="stairs relative p-3 text-center bg-pink-100 border rounded-t-lg"
+                         style="grid-row: {{ $seat['row'] }}; grid-column: {{ $seat['column'] }};">
+                        <span class="block">Сходи</span>
+                    </div>
+                @elseif($seat['type'] === 'exit')
+                    <div class="exit relative p-3 text-center bg-pink-100 border rounded-t-lg"
+                         style="grid-row: {{ $seat['row'] }}; grid-column: {{ $seat['column'] }};">
+                        <span class="block">Вихід</span>
+                    </div>
                 @else
                     <div class="empty-space p-3"></div>
                 @endif

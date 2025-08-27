@@ -8,6 +8,7 @@ use Filament\Resources\Pages\EditRecord;
 use App\Models\Bus;
 use App\Models\BusStop;
 use App\Models\Route;
+use App\Services\BusLayoutSyncer;
 
 class EditBus extends EditRecord
 {
@@ -26,6 +27,10 @@ class EditBus extends EditRecord
         // Sync boarding and dropping points
         $this->syncStops($bus, $data);
 
+        if (array_key_exists('seat_layout', $data)) {
+            BusLayoutSyncer::importFromSeatLayout($bus, prune: true);
+        }
+
         return $bus;
     }
 
@@ -39,6 +44,10 @@ class EditBus extends EditRecord
         $record->save();
 
         $this->syncStops($record, $data);
+
+        if (array_key_exists('seat_layout', $data)) {
+            BusLayoutSyncer::importFromSeatLayout($record, prune: true);
+        }
 
         return $record;
     }
@@ -162,9 +171,14 @@ class EditBus extends EditRecord
     /**
      * Define the header actions for the bus edit page.
      */
+
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('layout')
+                ->label('Конструктор салону')
+                ->icon('heroicon-o-squares-2x2')
+                ->url(fn () => BusResource::getUrl('layout', ['record' => $this->record])),
             Actions\DeleteAction::make(),
         ];
     }

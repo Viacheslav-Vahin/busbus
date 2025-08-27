@@ -28,6 +28,11 @@ class RouteScheduleController extends Controller
         $buses = \App\Models\Bus::where('route_id', $routeId)
             ->get();
 
+        $tripsByBusId = \App\Models\Trip::where('id', $routeId)
+            ->whereIn('bus_id', $buses->pluck('id'))
+            ->get()
+            ->keyBy('bus_id');
+
         $results = [];
 
         foreach ($buses as $bus) {
@@ -48,8 +53,12 @@ class RouteScheduleController extends Controller
             $bookedSeats = \App\Models\Booking::where('bus_id', $bus->id)->where('date', $date)->count();
             $freeSeats = $bus->seats_count - $bookedSeats;
 
+            $trip = $tripsByBusId->get($bus->id);
+
             $results[] = [
                 'id' => $bus->id,
+                'trip_id'        => $trip->id ?? null,
+                'bus_id' => $bus->id,
                 'bus_name' => $bus->name,
                 'start_location' => $startLocation,
                 'end_location' => $endLocation,

@@ -61,4 +61,28 @@ class AdditionalServiceResource extends Resource
             'edit' => Pages\EditAdditionalService::route('/{record}/edit'),
         ];
     }
+
+    public static function getModelLabel(): string
+    {
+        return 'Додаткові послуги';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Додаткові послуги';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return 'Додаткові послуги';
+    }
+    public static function getNavigationGroup(): ?string
+    {
+        return '⚙️ Налаштування';
+    }
+    public static function getNavigationIcon(): string
+    {
+        return 'heroicon-o-cog';
+    }
+
 }

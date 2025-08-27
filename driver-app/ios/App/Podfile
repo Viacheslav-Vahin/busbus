@@ -1,0 +1,27 @@
+require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+
+platform :ios, '16.0'                # <-- 16.0
+use_frameworks! :linkage => :static
+
+install! 'cocoapods', :disable_input_output_paths => true
+
+def capacitor_pods
+  pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+  pod 'CapacitorMlkitBarcodeScanning', :path => '../../node_modules/@capacitor-mlkit/barcode-scanning'
+  pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
+end
+
+target 'App' do
+  capacitor_pods
+end
+
+post_install do |installer|
+  assertDeploymentTarget(installer)   # це підніме мінімум, але інколи виставляє 13/14
+  # Примусово ставимо 16.0 для ВСІХ pod-цілей
+  installer.pods_project.targets.each do |t|
+    t.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+    end
+  end
+end

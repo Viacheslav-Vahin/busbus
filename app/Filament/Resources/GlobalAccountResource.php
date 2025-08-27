@@ -71,4 +71,28 @@ class GlobalAccountResource extends Resource
             'edit' => Pages\EditGlobalAccount::route('/{record}/edit'),
         ];
     }
+
+    public static function getModelLabel(): string
+    {
+        return 'Рахунки і реквізити';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Рахунки і реквізити';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return 'Рахунки і реквізити';
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        return '⚙️ Налаштування';
+    }
+    public static function getNavigationIcon(): string
+    {
+        return 'heroicon-o-document-text';
+    }
 }

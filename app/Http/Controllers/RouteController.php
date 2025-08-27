@@ -52,7 +52,7 @@ class RouteController extends Controller
 
         return response()->json($buses);
     }
-
+}
 //    public function getBusesByRouteAndDate(Request $request)
 //    {
 //        $routeId = $request->route_id;
@@ -85,5 +85,5 @@ class RouteController extends Controller
 //        }));
 //    }
 
-}
+//}
 

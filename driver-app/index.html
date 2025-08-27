@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>MaxBus Driver</title>
+</head>
+<body>
+<!-- LOGIN -->
+<div class="view" id="v-login">
+    <h1>Вхiд водiя</h1>
+    <form id="f-login" class="col">
+        <div class="row"><input id="email" type="email" placeholder="Email" required></div>
+        <div class="row"><input id="pass" type="password" placeholder="Пароль" required></div>
+        <button class="btn">Увійти</button>
+        <div id="login-out" class="note" style="margin-top:8px"></div>
+    </form>
+</div>
+
+<!-- HOME -->
+<div class="view" id="v-home">
+    <h1>Панель водія</h1>
+    <div id="home-shift" class="note"></div>
+    <div style="margin:12px 0">
+        <button id="btn-open-shift" class="btn">Вiдкрити змiну</button>
+        <button id="btn-close-shift" class="btn">Закрити змiну</button>
+        <button id="btn-scan" class="btn">Сканувати</button>
+        <button id="btn-manifest" class="btn">Маніфест</button>
+        <button id="btn-logout" class="btn btn-ghost">Вийти</button>
+    </div>
+</div>
+
+<!-- OPEN SHIFT -->
+<div class="view" id="v-open">
+    <h1>Відкрити зміну</h1>
+    <form id="f-open">
+        <div class="row"><input id="bus" type="number" placeholder="Bus ID" required></div>
+        <div class="row"><input id="route" type="number" placeholder="Route ID" required></div>
+        <div class="row"><input id="svcdate" type="date" required></div>
+        <div class="row"><input id="open_cash" type="number" step="0.01" placeholder="Початкова готівка (опційно)"></div>
+        <button class="btn">Відкрити</button>
+        <button type="button" class="btn btn-ghost" data-go-home>Назад</button>
+        <div id="open-out" class="note" style="margin-top:8px"></div>
+    </form>
+</div>
+
+<!-- CLOSE SHIFT -->
+<div class="view" id="v-close">
+    <h1>Закрити зміну</h1>
+    <form id="f-close">
+        <div class="row"><input id="closing_cash" type="number" step="0.01" placeholder="Залишок готівки, UAH" required></div>
+        <div class="row"><input id="terminal" type="number" step="0.01" placeholder="Здано в термінал, UAH"></div>
+        <button class="btn">Закрити</button>
+        <button type="button" class="btn btn-ghost" data-go-home>Назад</button>
+        <div id="close-out" class="note" style="margin-top:8px"></div>
+    </form>
+</div>
+
+<!-- SCAN -->
+<div class="view" id="v-scan">
+    <h1>Сканер</h1>
+    <div id="scan-out" class="note">Готово до сканування…</div>
+    <div style="margin-top:12px"><button class="btn btn-ghost" data-go-home>Назад</button></div>
+</div>
+
+<!-- MANIFEST -->
+<div class="view" id="v-manifest">
+    <h1>Маніфест</h1>
+    <div id="man-out" class="note"></div>
+    <div style="margin-top:12px"><button class="btn btn-ghost" data-go-home>Назад</button></div>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

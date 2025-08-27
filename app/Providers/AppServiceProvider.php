@@ -5,6 +5,8 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 use App\Http\Livewire\SeatSelector;
+use App\Models\Trip;
+use App\Observers\TripObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,6 +24,6 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Livewire::component('seat-selector', \App\Http\Livewire\SeatSelector::class);
-
+        Trip::observe(TripObserver::class);
     }
 }

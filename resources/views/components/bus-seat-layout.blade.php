@@ -17,6 +17,10 @@
                     Стюардеса
                 @elseif($seat['type'] === 'coffee')
                     Кавомашина
+                @elseif($seat['type'] === 'stairs')
+                    Сходи
+                @elseif($seat['type'] === 'exit')
+                    Вихід
                 @else
                     Інше
                 @endif

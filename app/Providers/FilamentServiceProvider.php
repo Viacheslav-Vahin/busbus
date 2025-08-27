@@ -13,6 +13,7 @@ class FilamentServiceProvider extends ServiceProvider
             // Видаляємо виклик mix() і використовуємо тільки Vite
             Filament::registerViteTheme([
                 'resources/css/app.css',
+//                'resources/js/index.tsx',
                 'resources/js/app.js',
             ]);
         });

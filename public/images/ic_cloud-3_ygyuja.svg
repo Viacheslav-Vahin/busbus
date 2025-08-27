@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="715px" height="407px" viewBox="0 0 715 407" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 50 (54983) - http://www.bohemiancoding.com/sketch -->
+    <title>ic_cloud-3</title>
+    <desc>Created with Sketch.</desc>
+    <defs>
+        <linearGradient x1="68.4789814%" y1="6.90652645%" x2="37.4873697%" y2="97.959233%" id="linearGradient-1">
+            <stop stop-color="#FFFFFF" offset="0%"></stop>
+            <stop stop-color="#FFFFFF" stop-opacity="0" offset="100%"></stop>
+        </linearGradient>
+    </defs>
+    <g id="design" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd" opacity="0.200000003">
+        <g id="HKHB_homepage" transform="translate(-246.000000, -4752.000000)" fill="url(#linearGradient-1)" fill-rule="nonzero">
+            <g id="our-process" transform="translate(0.000000, 4730.000000)">
+                <path d="M961,326.46124 C961,269.670543 915.347162,225.5 860.248908,225.5 C849.229258,225.5 838.209607,227.077519 827.189956,231.810078 C827.189956,230.232558 827.189956,227.077519 827.189956,225.5 C827.189956,113.496124 735.884279,22 624.113537,22 C526.510917,22 444.650655,91.4108527 425.759825,184.484496 C408.443231,176.596899 389.552402,171.864341 369.087336,171.864341 C298.246725,171.864341 240,230.232558 240,301.22093 C240,367.476744 290.375546,422.689922 356.49345,429 L864.971616,429 C918.495633,424.267442 961,380.096899 961,326.46124 Z" id="ic_cloud-3"></path>
+            </g>
+        </g>
+    </g>
+</svg>

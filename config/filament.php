@@ -12,25 +12,26 @@ return [
     |
     */
 
-    'path' => 'admin',  // Це шлях до адмін-панелі Filament
+    'path' => 'dashboard',  // Це шлях до адмін-панелі Filament
 
     'panels' => [
         'default' => [
             'id' => 'admin',
+            'path' => 'dashboard',
             'resources' => [
-                 App\Filament\Resources\PostResource::class,
-                    App\Filament\Resources\UserResource::class,
-                    App\Filament\Resources\RoleResource::class,
-                    App\Filament\Resources\PermissionResource::class,
-                    App\Filament\Resources\BusResource::class,
-                    App\Filament\Resources\StopResource::class,
-                    App\Filament\Resources\BookingResource::class,
+                App\Filament\Resources\PostResource::class,
+                App\Filament\Resources\UserResource::class,
+                App\Filament\Resources\RoleResource::class,
+                App\Filament\Resources\PermissionResource::class,
+                App\Filament\Resources\BusResource::class,
+                App\Filament\Resources\StopResource::class,
+                App\Filament\Resources\BookingResource::class,
             ],
             'pages' => [
-                 App\Filament\Pages\Dashboard::class,
+                App\Filament\Pages\Dashboard::class,
             ],
             'widgets' => [
-                 App\Filament\Widgets\AccountWidget::class,
+                App\Filament\Widgets\AccountWidget::class,
             ],
         ],
     ],
@@ -88,6 +89,8 @@ return [
 
     'cache_path' => base_path('bootstrap/cache/filament'),
 
+    'locale' => 'uk',
+
     /*
     |--------------------------------------------------------------------------
     | Auth Guard
@@ -100,7 +103,7 @@ return [
 
     'auth' => [
         'guard' => env('FILAMENT_AUTH_GUARD', 'web'),
-        'middleware' => ['auth'],  // Додайте додаткові middleware, якщо потрібно
+        'middleware' => ['web', 'auth'],  // Додайте додаткові middleware, якщо потрібно
     ],
 
     /*
@@ -305,7 +308,7 @@ return [
             'th_sortable_group_asc' => [
                 'class' => 'group text-indigo-500',
             ],
-            ]
+        ]
     ],
 
     'pagination' => [
@@ -368,8 +371,8 @@ return [
             'link_group_focus_active_hover' => [
                 'class' => 'group hover:bg-indigo-700',
             ],
-            ]
-        ],
+        ]
+    ],
 
 //    'pages' => [
 //        'register' => [

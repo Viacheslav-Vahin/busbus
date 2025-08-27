@@ -1,4 +1,5 @@
-console.log('et1');
+// resources/js/app.js
+
 import './bootstrap';
 
 function initLivewireListeners() {
@@ -107,3 +108,9 @@ document.addEventListener('seatSelected', event => {
     // }
 });
 
+// var scene = $('#scene').get(0);
+// var parallaxInstance = new Parallax(scene, {
+//     relativeInput: true,
+//     hoverOnly: true,
+//     calibrateX: true
+// });

@@ -116,7 +116,7 @@ class Bus extends Model
             }
         }
     }
-
+    public function seats(){ return $this->hasMany(\App\Models\BusSeat::class); }
 //    public static function searchBuses($routeId, $date)
 //    {
 //        // Форматуємо дату для перевірки дня тижня

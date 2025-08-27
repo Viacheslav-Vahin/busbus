@@ -74,4 +74,24 @@ class RouteResource extends Resource
             'edit' => Pages\EditRoute::route('/{record}/edit'),
         ];
     }
+
+    public static function getModelLabel(): string
+    {
+        return 'Маршрути';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Маршрути';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return 'Маршрути';
+    }
+    public static function getNavigationIcon(): string
+    {
+        return 'heroicon-o-arrow-trending-up';
+    }
+
 }

@@ -9,7 +9,7 @@ import BookingPage from './Pages/BookingPage';
 
 
 // const container = document.getElementById('root')!;
-const root = createRoot(document.getElementById('root')!);
+const root = createRoot(document.getElementById('app')!);
 root.render(
     <BrowserRouter>
         <Routes>

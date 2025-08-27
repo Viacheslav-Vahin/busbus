@@ -99,4 +99,19 @@ class TripResource extends Resource
             'edit' => Pages\EditTrip::route('/{record}/edit'),
         ];
     }
+
+    public static function getModelLabel(): string
+    {
+        return 'Маршрути';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Маршрути';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return 'Маршрути';
+    }
 }

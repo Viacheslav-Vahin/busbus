@@ -2,46 +2,52 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
+    // Явно вкажемо guard, якщо у проєкті лише 'web'
+    protected $guard_name = 'web';
+
     protected $fillable = [
         'name',
+        'surname',     // якщо є
         'email',
+        'phone',       // якщо є
         'password',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /**
+     * Доступ до панелей Filament.
+     * Якщо у тебе одна адмін-панель — лиши гілку 'admin'.
+     * Якщо зробиш окрему панель для водія — додай 'driver'.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return match ($panel->getId()) {
+            'admin'  => $this->hasAnyRole(['admin','manager','accountant']) || $this->can('access_admin'),
+            'driver' => $this->hasRole('driver'),
+            default  => false,
+        };
     }
 }

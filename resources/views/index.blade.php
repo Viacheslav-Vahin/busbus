@@ -5,13 +5,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>MaxBus - міжнародні пасажирські перевезення</title>
-
-    {{-- Vite will inject your React bundle here --}}
     @viteReactRefresh
-    @vite('resources/js/app.tsx')
+    @vite(['resources/js/index.tsx', 'resources/css/app.css'])
 </head>
 <body class="antialiased">
-{{-- This is where React will mount --}}
-<div id="root"></div>
+<div id="app"></div>
 </body>
 </html>
+

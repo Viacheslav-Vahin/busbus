@@ -1,0 +1,18 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="400" height="400" rx="90" fill="#2c2a29"/>
+    <!-- Верхній напівпрозорий напис MAX (ще вище) -->
+    <text x="82" y="90" font-family="Fira Code, Consolas, monospace" font-size="85" fill="#fff" fill-opacity="0.24" font-weight="bold" letter-spacing="13">MAX</text>
+    <!-- Нижній напівпрозорий напис BUS -->
+    <text x="105" y="355" font-family="Fira Code, Consolas, monospace" font-size="85" fill="#fff" fill-opacity="0.24" font-weight="bold" letter-spacing="20">BUS</text>
+    <!-- Блок з тінню -->
+    <g filter="url(#shadow)">
+        <rect x="110" y="110" width="180" height="180" rx="40" fill="#221f1e"/>
+    </g>
+    <!-- Техно-код -->
+    <text x="130" y="255" font-family="Fira Code, Consolas, monospace" font-size="110" fill="#faa51a" font-weight="bold" letter-spacing="6">&lt;/&gt;</text>
+    <defs>
+        <filter id="shadow" x="100" y="100" width="200" height="200" filterUnits="userSpaceOnUse">
+            <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#faa51a" flood-opacity="0.14"/>
+        </filter>
+    </defs>
+</svg>

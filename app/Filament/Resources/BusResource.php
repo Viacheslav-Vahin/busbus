@@ -25,6 +25,7 @@ use Filament\Forms\Components\Tabs;
 use Filament\Forms\Components\Tabs\Tab;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Grid;
+use App\Models\SeatType;
 
 class BusResource extends Resource
 {
@@ -114,25 +115,43 @@ class BusResource extends Resource
                                                                 'coffee' => 'Кавомашина',
                                                                 'driver' => 'Водій',
                                                                 'stuardesa' => 'Стюардеса',
+                                                                'stairs' => 'Сходи',
+                                                                'exit' => 'Вихід',
                                                             ])
-                                                            ->required(),
+                                                            ->required()
+                                                            ->live(),
+                                                        // НОВЕ: тип сидіння (з довідника) — зберігаємо КОД у JSON (classic/recliner/panoramic)
+                                                        Select::make('seat_type')
+                                                            ->label('Тип сидіння')
+                                                            ->options(fn () => SeatType::query()->pluck('name', 'code')) // code: classic/recliner/panoramic
+                                                            ->searchable()->preload()->native(false)
+                                                            ->visible(fn (callable $get) => $get('type') === 'seat')
+                                                            ->required(fn (callable $get) => $get('type') === 'seat'),
+
                                                         Select::make('ticket_category')
                                                             ->label('Категорія квитка')
-                                                            ->options([
-                                                                'adult' => 'Дорослий',
-                                                                'child' => 'Дитячий',
-                                                            ])
+                                                            ->options(['adult' => 'Дорослий','child' => 'Дитячий'])
                                                             ->default('adult')
-                                                            ->required(),
+                                                            ->visible(fn (callable $get) => $get('type') === 'seat')
+                                                            ->required(fn (callable $get) => $get('type') === 'seat'),
+
                                                         TextInput::make('price')
                                                             ->label('Ціна за сидіння')
-                                                            ->numeric()
-                                                            ->minValue(0)
-//                                                            ->helperText('Вкажіть ціну для цього сидіння')
-                                                            ->required(),
+                                                            ->numeric()->minValue(0)
+                                                            ->visible(fn (callable $get) => $get('type') === 'seat')
+                                                            ->required(fn (callable $get) => $get('type') === 'seat'),
+                                                        // НОВЕ: для службових елементів — розміри в клітинках
+                                                        TextInput::make('w')
+                                                            ->label('Ширина (клітинки)')
+                                                            ->numeric()->default(1)
+                                                            ->visible(fn (callable $get) => $get('type') !== 'seat'),
+                                                        TextInput::make('h')
+                                                            ->label('Висота (клітинки)')
+                                                            ->numeric()->default(1)
+                                                            ->visible(fn (callable $get) => $get('type') !== 'seat'),
                                                     ])
                                             ])
-                                            ->createItemButtonLabel('Add Seat')
+                                            ->createItemButtonLabel('Додати елемент')
                                             ->default([])
                                             ->minItems(1)
                                             ->required(),
@@ -284,6 +303,14 @@ class BusResource extends Resource
                     ->label('Дата створення')
                     ->dateTime('d-m-Y H:i')
                     ->sortable(),
+            ])
+            ->actions([
+                Tables\Actions\Action::make('layout')
+                    ->label('Конструктор салону')
+                    ->icon('heroicon-o-squares-2x2')
+                    ->url(fn (Bus $record) => BusResource::getUrl('layout', ['record' => $record])),
+                Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
             ]);
     }
 
@@ -293,6 +320,26 @@ class BusResource extends Resource
             'index' => Pages\ListBuses::route('/'),
             'create' => Pages\CreateBus::route('/create'),
             'edit' => Pages\EditBus::route('/{record}/edit'), // Важливо, щоб був коректний шлях {record}/edit
+            'layout' => Pages\LayoutBuilder::route('/{record}/layout'),
         ];
+    }
+
+    public static function getModelLabel(): string
+    {
+        return 'Автобус';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Автобус';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return 'Автобус';
+    }
+    public static function getNavigationIcon(): string
+    {
+        return 'heroicon-o-viewfinder-circle';
     }
 }

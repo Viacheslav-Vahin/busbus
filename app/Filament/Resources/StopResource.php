@@ -65,4 +65,19 @@ class StopResource extends Resource
             'edit' => Pages\EditStop::route('/{record}/edit'),
         ];
     }
+
+    public static function getModelLabel(): string
+    {
+        return 'Зупинки';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Зупинки';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return 'Зупинки';
+    }
 }

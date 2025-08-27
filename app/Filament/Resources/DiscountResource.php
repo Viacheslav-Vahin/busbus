@@ -92,4 +92,27 @@ class DiscountResource extends Resource
             'edit' => Pages\EditDiscount::route('/{record}/edit'),
         ];
     }
+
+    public static function getModelLabel(): string
+    {
+        return 'Дисконти';
+    }
+
+    public static function getPluralModelLabel(): string
+    {
+        return 'Дисконти';
+    }
+
+    public static function getNavigationLabel(): string
+    {
+        return 'Дисконти';
+    }
+    public static function getNavigationGroup(): ?string
+    {
+        return '⚙️ Налаштування';
+    }
+    public static function getNavigationIcon(): string
+    {
+        return 'heroicon-o-banknotes';
+    }
 }
