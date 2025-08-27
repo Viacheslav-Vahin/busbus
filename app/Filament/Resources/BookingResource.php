@@ -59,7 +59,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 
 //use Filament\Tables\Filters\Indicator;
-
+use Filament\Forms\Get;
 class BookingResource extends Resource
 {
     protected static ?string $model = Booking::class;
@@ -93,7 +93,7 @@ class BookingResource extends Resource
                                     // Clear dependent fields
                                     $set('date', null);
                                     $set('bus_id', null);
-                                    $set('seat_layout', null);
+                                    $set('seat_layout', '');
                                     $set('selected_seat', null);
                                     $set('seat_number', null);
                                     $set('price', null);

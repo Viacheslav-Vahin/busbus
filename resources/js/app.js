@@ -1,116 +1,75 @@
 // resources/js/app.js
-
 import './bootstrap';
 
-function initLivewireListeners() {
+function initLivewireBridge() {
+    // 1) Місток: seat_layout -> Livewire(updateSeatLayout)
     const seatLayoutInput = document.querySelector('input#seat_layout');
     if (seatLayoutInput) {
-        console.log('seatLayoutInput is present');
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'value') {
-                    const newValue = seatLayoutInput.value;
-                    if (newValue !== '[]') {
-                        console.log('Livewire event updateSeatLayout dispatched with:', newValue);
-                        window.Livewire.dispatch('updateSeatLayout', [newValue]);
-
-                    }
+        // Підстрахуємось: спрацює і коли Livewire міняє 'value',
+        // і коли хтось вручну тригерне input/change.
+        const dispatchIfNeeded = () => {
+            const newValue = seatLayoutInput.value;
+            if (newValue && newValue !== '[]') {
+                console.log('[bridge] dispatch updateSeatLayout with:', newValue);
+                // Livewire v3: window.Livewire.dispatch(eventName, payloadArray)
+                // Передаємо саме масивом, бо слухач очікує один аргумент
+                if (window.Livewire?.dispatch) {
+                    window.Livewire.dispatch('updateSeatLayout', [newValue]); // v3
+                } else if (window.Livewire?.emit) {
+                    window.Livewire.emit('updateSeatLayout', newValue);       // v2
                 }
-            });
+            }
+        };
+
+        // 1a) MutationObserver — відслідковує зміну атрибуту value
+        const observer = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                if (m.type === 'attributes' && m.attributeName === 'value') {
+                    dispatchIfNeeded();
+                }
+            }
         });
         observer.observe(seatLayoutInput, { attributes: true, attributeFilter: ['value'] });
+
+        // 1b) На всяк випадок — ще й події input/change
+        seatLayoutInput.addEventListener('input', dispatchIfNeeded);
+        seatLayoutInput.addEventListener('change', dispatchIfNeeded);
+    } else {
+        console.warn('[bridge] <input id="seat_layout"> не знайдено у DOM');
     }
 
-    window.Livewire.on('seatSelected', function (data) {
+    // 2) Ловимо browser event від Livewire-компонента:
+    // $this->dispatch('seatSelected', [...])
+    // Це НЕ livewire-бас подія, тому слухаємо через addEventListener
+    window.addEventListener('seatSelected', (e) => {
+        // e.detail може бути або об’єктом, або масивом із одним об’єктом (залежно як диспатчиш)
+        const payload = Array.isArray(e.detail) && e.detail.length ? e.detail[0] : e.detail;
+        if (!payload) return;
 
-        // const selectedSeatInput = document.getElementById('selected_seat');
-        // const numberSeatInput = document.getElementById('data.seat_number');
-        // const priceInput = document.getElementById('data.price');
+        const selectedSeatInput = document.getElementById('selected_seat');
+        const numberSeatInput   = document.getElementById('data.seat_number');
+        const priceInput        = document.getElementById('data.price');
 
-        // if (selectedSeatInput) {
-        //     selectedSeatInput.value = data.seatNumber;
-        //     console.log(selectedSeatInput.value);
-        //     selectedSeatInput.dispatchEvent(new Event('change'));
-        // }
-        //
-        // if (numberSeatInput) {
-        //     numberSeatInput.value = data.seatNumber;
-        //     console.log(numberSeatInput.value);
-        //     numberSeatInput.dispatchEvent(new Event('change'));
-        // }
-        //
-        // if (priceInput && data.seatPrice) {
-        //     priceInput.value = data.seatPrice;
-        //     priceInput.dispatchEvent(new Event('change'));
-        // }
-
-        const dataSelect = Array.isArray(event.detail) && event.detail.length ? event.detail[0] : event.detail;
-        if (dataSelect) {
-            const selectedSeatInput = document.getElementById('selected_seat');
-            const numberSeatInput = document.getElementById('data.seat_number');
-            const priceInput = document.getElementById('data.price');
-
-            if (selectedSeatInput) {
-                selectedSeatInput.value = dataSelect.seatNumber;
-                selectedSeatInput.dispatchEvent(new Event('change'));
-                console.log(selectedSeatInput.value);
-            }
-
-            if (numberSeatInput) {
-                numberSeatInput.value = dataSelect.seatNumber;
-                console.log(numberSeatInput.value);
-                numberSeatInput.dispatchEvent(new Event('change'));
-            }
-
-            if (priceInput) {
-                priceInput.value = dataSelect.seatPrice;
-                priceInput.dispatchEvent(new Event('change'));
-                console.log(priceInput.value);
-            }
+        if (selectedSeatInput) {
+            selectedSeatInput.value = payload.seatNumber ?? '';
+            selectedSeatInput.dispatchEvent(new Event('change'));
         }
-    });
-
-    document.addEventListener('seat-layout-updated', function() {
-        const seatLayoutInput = document.querySelector('input#seat_layout');
-        if (seatLayoutInput && seatLayoutInput.value && seatLayoutInput.value !== '[]') {
-            console.log('Livewire event updateSeatLayout dispatched from seat-layout-updated:', seatLayoutInput.value);
-            window.Livewire.dispatch('updateSeatLayout', seatLayoutInput.value);
+        if (numberSeatInput) {
+            numberSeatInput.value = payload.seatNumber ?? '';
+            numberSeatInput.dispatchEvent(new Event('change'));
         }
-    });
+        if (priceInput) {
+            // Якщо ціна може бути рядком — ставимо як є
+            priceInput.value = payload.seatPrice ?? '';
+            priceInput.dispatchEvent(new Event('change'));
+        }
 
+        console.log('[bridge] seatSelected -> form updated:', payload);
+    });
 }
 
 if (window.Livewire) {
-    initLivewireListeners();
+    initLivewireBridge();
 } else {
-    document.addEventListener('livewire:load', initLivewireListeners);
+    document.addEventListener('livewire:load', initLivewireBridge);
 }
-
-document.addEventListener('seatSelected', event => {
-    // event.detail - це масив, тому беремо перший елемент
-    // const data = Array.isArray(event.detail) && event.detail.length ? event.detail[0] : event.detail;
-    // if (data) {
-    //     const selectedSeatInput = document.getElementById('selected_seat');
-    //     // const priceInput = document.querySelector('input[name="data[price]"]');
-    //     const priceInput = document.getElementById('data.price');
-    //
-    //     if (selectedSeatInput) {
-    //         selectedSeatInput.value = data.seatNumber;
-    //         selectedSeatInput.dispatchEvent(new Event('change'));
-    //         console.log(selectedSeatInput.value);
-    //     }
-    //
-    //     if (priceInput) {
-    //         priceInput.value = data.seatPrice;
-    //         priceInput.dispatchEvent(new Event('change'));
-    //         console.log(priceInput.value);
-    //     }
-    // }
-});
-
-// var scene = $('#scene').get(0);
-// var parallaxInstance = new Parallax(scene, {
-//     relativeInput: true,
-//     hoverOnly: true,
-//     calibrateX: true
-// });

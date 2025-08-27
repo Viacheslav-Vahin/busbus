@@ -17,7 +17,8 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\AuthenticateSession;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-
+use Filament\View\PanelsRenderHook;
+use Illuminate\Support\HtmlString;
 class AdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
@@ -61,6 +62,52 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn () => new HtmlString(<<<'HTML'
+<script>
+(function(){
+  function initLivewireBridge(){
+    const seatLayoutInput = document.querySelector('input#seat_layout');
+    if (seatLayoutInput) {
+      const observer = new MutationObserver(function(mutations){
+        mutations.forEach(function(m){
+          if (m.type === 'attributes' && m.attributeName === 'value') {
+            const v = seatLayoutInput.value;
+            if (v && v !== '[]') {
+              if (window.Livewire && typeof window.Livewire.dispatch === 'function') {
+                window.Livewire.dispatch('updateSeatLayout', [v]); // Livewire v3
+              } else if (window.Livewire && typeof window.Livewire.emit === 'function') {
+                window.Livewire.emit('updateSeatLayout', v);       // Livewire v2
+              }
+            }
+          }
+        });
+      });
+      observer.observe(seatLayoutInput, { attributes: true, attributeFilter: ['value'] });
+    }
+
+    window.addEventListener('seatSelected', function(e){
+      const d = Array.isArray(e.detail) && e.detail.length ? e.detail[0] : e.detail;
+      if (!d) return;
+      const sel   = document.getElementById('selected_seat');
+      const num   = document.getElementById('data.seat_number');
+      const price = document.getElementById('data.price');
+      if (sel)   { sel.value = d.seatNumber;  sel.dispatchEvent(new Event('change')); }
+      if (num)   { num.value = d.seatNumber;  num.dispatchEvent(new Event('change')); }
+      if (price) { price.value = d.seatPrice; price.dispatchEvent(new Event('change')); }
+    });
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    initLivewireBridge();
+  } else {
+    document.addEventListener('DOMContentLoaded', initLivewireBridge, { once: true });
+  }
+})();
+</script>
+HTML)
+            )
 //            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsPlugin::make())
 //            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsPlugin::make()->allowGPTScan())
 //            ->plugin(\TomatoPHP\FilamentTranslations\FilamentTranslationsSwitcherPlugin::make())
