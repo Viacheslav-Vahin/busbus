@@ -17,9 +17,7 @@ use App\Http\Controllers\PaymentReturnController;
 use App\Http\Controllers\WayForPayWebhookController;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as FrameworkCsrf;
-use App\Http\Controllers\TelegramWebhookController;
-
-Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle'])->name('telegram.webhook');
+use App\Http\Controllers\Admin\WpBookingController;
 
 // Домашня: після логіна розвести водія та решту
 Route::get('/home', function () {
@@ -97,3 +95,11 @@ Route::middleware(['auth', 'role:passenger'])->prefix('cabinet')->name('cabinet.
 Route::match(['GET','POST'], '/payment/return', [PaymentReturnController::class, 'show'])
     ->name('payment.return')
     ->withoutMiddleware([FrameworkCsrf::class]);
+
+Route::middleware(['web','auth']) // додай свої middleware/policies
+->prefix('admin/wp-bookings')
+    ->name('admin.wp_bookings.')
+    ->group(function () {
+        Route::get('/', [WpBookingController::class, 'index'])->name('index');
+        Route::get('/{id}', [WpBookingController::class, 'show'])->name('show');
+    });

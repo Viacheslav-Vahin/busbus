@@ -462,14 +462,14 @@ class BookingController extends Controller
                 . "Посилання: {$link}";
 
             // Viber (якщо сервіс є в проєкті)
-            if (!empty($data['phone']) && class_exists(\App\Services\ViberSender::class)) {
-                \App\Services\ViberSender::sendInvoice($data['phone'], $msg);
-            }
-
-            // Telegram (якщо є ідентифікатор — з фронта або з профілю)
-            if (!empty($data['telegram']) && class_exists(\App\Services\TelegramSender::class)) {
-                \App\Services\TelegramSender::sendInvoice($data['telegram'], $msg);
-            }
+//            if (!empty($data['phone']) && class_exists(\App\Services\ViberSender::class)) {
+//                \App\Services\ViberSender::sendInvoice($data['phone'], $msg);
+//            }
+//
+//            // Telegram (якщо є ідентифікатор — з фронта або з профілю)
+//            if (!empty($data['telegram']) && class_exists(\App\Services\TelegramSender::class)) {
+//                \App\Services\TelegramSender::sendInvoice($data['telegram'], $msg);
+//            }
 
             // Email простим текстом (без окремого Mailable)
             if (!empty($user->email)) {

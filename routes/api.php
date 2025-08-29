@@ -15,8 +15,11 @@ use App\Http\Controllers\StandbyController;
 use App\Http\Controllers\DevPaymentsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+// routes/api.php (краще api, без сесій/куків)
+use App\Http\Controllers\TelegramWebhookController;
 
-
+Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle'])
+    ->name('telegram.webhook');
 Route::get('/routes', [RouteController::class, 'apiIndex']);
 Route::get('/routes/{route}/available-dates', [RouteController::class, 'availableDates']);
 Route::get('/trip/{trip}/bus-info', [\App\Http\Controllers\BookingController::class, 'getBusInfo']);

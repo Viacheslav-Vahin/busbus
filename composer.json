@@ -8,6 +8,7 @@
         "php": "^8.3.0",
         "bacon/bacon-qr-code": "^2.0.8",
         "barryvdh/laravel-dompdf": "*",
+        "doctrine/dbal": "^4.2",
         "filament/filament": "^3.2",
         "laravel/framework": "^11.9",
         "laravel/sanctum": "^4.2",

@@ -17,6 +17,7 @@ class VerifyCsrfToken extends Middleware
         'payment/*',
         'payment/wayforpay/webhook*',
         'payment/return*',
+        'api/telegram/webhook',
         // 'payment/liqpay/callback',
         // 'payment/mono/webhook',
     ];

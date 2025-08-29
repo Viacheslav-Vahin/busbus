@@ -53,15 +53,6 @@ return [
         'api_secret' => env('GA4_API_SECRET'),
     ],
 
-//    'w4p' => [
-//        'account' => env('W4P_MERCHANT_ACCOUNT', ''),   // напр. 'test_merch_n1'
-//        'secret' => env('W4P_SECRET_KEY', ''),         // SecretKey
-//        'domain' => env('W4P_DOMAIN', ''),             // напр. 'maxbus.example.com'
-//        'currency' => env('W4P_CURRENCY', 'UAH'),
-//        'lang' => env('W4P_LANG', 'UA'),
-//        'service_url' => env('W4P_SERVICE_URL', ''),        // якщо хочеш перезаписати URL вебхука
-//    ],
-
     'w4p' => [
         'account' => env('WAYFORPAY_MERCHANT_ACCOUNT'),
         'key'     => env('WAYFORPAY_SECRET_KEY'),

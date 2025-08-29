@@ -115,6 +115,7 @@ return [
         Illuminate\Cache\CacheServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
         App\Providers\FilamentServiceProvider::class,
+        App\Providers\WordPressAuthServiceProvider::class,
     ],
 
 //    'layouts' => [

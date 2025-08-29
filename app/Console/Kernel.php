@@ -8,6 +8,11 @@ use Illuminate\Support\Facades\DB;
 
 class Kernel extends ConsoleKernel
 {
+    protected $commands = [
+        \App\Console\Commands\ImportWPUsers::class,
+        \App\Console\Commands\PromoteWPBookings::class,
+        \App\Console\Commands\WpSeedCore::class,
+    ];
     /**
      * Define the application's command schedule.
      */
