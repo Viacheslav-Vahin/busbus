@@ -4,10 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
-use App\Models\Bus;
-use App\Models\Stop;
 
 class BusStop extends Model
 {
@@ -23,5 +19,16 @@ class BusStop extends Model
     public function stop()
     {
         return $this->belongsTo(Stop::class);
+    }
+
+    /* ==== scopes ==== */
+    public function scopeBoardingAt($q, int $stopId)
+    {
+        return $q->where('type', 'boarding')->where('stop_id', $stopId);
+    }
+
+    public function scopeDroppingAt($q, int $stopId)
+    {
+        return $q->where('type', 'dropping')->where('stop_id', $stopId);
     }
 }

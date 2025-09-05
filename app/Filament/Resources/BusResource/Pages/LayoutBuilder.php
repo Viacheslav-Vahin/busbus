@@ -1,16 +1,15 @@
 <?php
-// app/Filament/Resources/BusResource/Pages/LayoutBuilder.php
+
 namespace App\Filament\Resources\BusResource\Pages;
 
 use App\Filament\Resources\BusResource;
-use App\Models\{Bus, BusSeat, BusLayoutElement};
+use App\Models\{Bus, BusSeat, BusLayoutElement, SeatType};
 use App\Services\BusLayoutSyncer;
 use Filament\Resources\Pages\Page;
 use Filament\Actions;
-use Illuminate\Support\Facades\DB;
-use App\Models\SeatType;
 use Filament\Forms;
 use Filament\Forms\Components\Select;
+use Illuminate\Support\Facades\DB;
 
 class LayoutBuilder extends Page
 {
@@ -18,36 +17,70 @@ class LayoutBuilder extends Page
     protected static string $view = 'filament.resources.bus-resource.pages.layout-builder';
 
     public ?int $record = null; // bus_id
+
     public array $seats = [];
     public array $elements = [];
     public array $seatTypes = [];
 
+    // ✨ ДОДАНО: розміри сітки динамічно
+    public int $cols = 24;
+    public int $rows = 8;
+
     public function mount(int|string $record): void
     {
         $this->record = (int) $record;
+
         $this->loadSeats();
         $this->loadElements();
-        $this->seatTypes = SeatType::select('id','name','code')->orderBy('id')->get()->toArray();
+        $this->recalcGrid(); // ✨
+
+        $this->seatTypes = SeatType::select('id','name','code')
+            ->orderBy('id')->get()->toArray();
     }
 
-    public function loadSeats(): void {
+    public function loadSeats(): void
+    {
         $this->seats = BusSeat::where('bus_id', $this->record)
-            ->orderByRaw('CAST(number AS UNSIGNED)')->get(['id','number','x','y','seat_type_id'])->toArray();
-    }
-    public function loadElements(): void {
-        $this->elements = BusLayoutElement::where('bus_id', $this->record)
-            ->orderBy('type')->get(['id','type','x','y','w','h','label'])->toArray();
+            ->orderByRaw('CAST(number AS UNSIGNED)')
+            ->get(['id','number','x','y','seat_type_id'])
+            ->toArray();
     }
 
-    protected function cellOccupied(int $x, int $y, ?int $exceptSeat = null, ?int $exceptEl = null): bool {
-        // зайнято іншим сидінням
+    public function loadElements(): void
+    {
+        $this->elements = BusLayoutElement::where('bus_id', $this->record)
+            ->orderBy('type')
+            ->get(['id','type','x','y','w','h','label'])
+            ->toArray();
+    }
+
+    // ✨ ДОДАНО: перерахунок потрібних рядків/колонок сітки
+    protected function recalcGrid(): void
+    {
+        $maxX = 0;
+        $maxY = 0;
+
+        foreach ($this->seats as $s) {
+            $maxX = max($maxX, (int)($s['x'] ?? 0));
+            $maxY = max($maxY, (int)($s['y'] ?? 0));
+        }
+        foreach ($this->elements as $e) {
+            $maxX = max($maxX, (int)($e['x'] ?? 0) + (int)($e['w'] ?? 1) - 1);
+            $maxY = max($maxY, (int)($e['y'] ?? 0) + (int)($e['h'] ?? 1) - 1);
+        }
+
+        // запас по 2 клітинки навколо + мінімальні значення
+        $this->cols = max(24, $maxX + 2);
+        $this->rows = max(8,  $maxY + 2);
+    }
+
+    protected function cellOccupied(int $x, int $y, ?int $exceptSeat = null, ?int $exceptEl = null): bool
+    {
         $seatBusy = BusSeat::where('bus_id',$this->record)
             ->when($exceptSeat, fn($q)=>$q->where('id','!=',$exceptSeat))
             ->where('x',$x)->where('y',$y)->exists();
-
         if ($seatBusy) return true;
 
-        // зайнято елементом (беремо до уваги розмір w/h)
         $elBusy = BusLayoutElement::where('bus_id',$this->record)
             ->when($exceptEl, fn($q)=>$q->where('id','!=',$exceptEl))
             ->where(function($q) use ($x,$y){
@@ -68,6 +101,7 @@ class LayoutBuilder extends Page
         BusSeat::where('id',$id)->where('bus_id',$this->record)->update(['x'=>$x,'y'=>$y]);
 
         $this->loadSeats();
+        $this->recalcGrid(); // ✨
         if ($bus = Bus::find($this->record)) BusLayoutSyncer::exportToSeatLayout($bus);
 
         $this->dispatch('notify', type: 'success', message: 'Збережено');
@@ -77,7 +111,6 @@ class LayoutBuilder extends Page
     {
         $el = BusLayoutElement::where('id',$id)->where('bus_id',$this->record)->firstOrFail();
 
-        // перевірка колізій з урахуванням розміру елемента
         for ($dx=0; $dx<$el->w; $dx++){
             for ($dy=0; $dy<$el->h; $dy++){
                 if ($this->cellOccupied($x+$dx, $y+$dy, exceptEl: $id)) {
@@ -90,9 +123,68 @@ class LayoutBuilder extends Page
         $el->update(['x'=>$x,'y'=>$y]);
 
         $this->loadElements();
+        $this->recalcGrid(); // ✨
         if ($bus = Bus::find($this->record)) BusLayoutSyncer::exportToSeatLayout($bus);
 
         $this->dispatch('notify', type: 'success', message: 'Переміщено');
+    }
+
+    // ✨ ДОДАНО: видалення сидіння
+    public function deleteSeat(int $seatId): void
+    {
+        $seat = BusSeat::where('bus_id',$this->record)->find($seatId);
+        if (! $seat) return;
+
+        $num = $seat->number;
+        $seat->delete();
+
+        $this->loadSeats();
+        $this->recalcGrid();
+        if ($bus = Bus::find($this->record)) BusLayoutSyncer::exportToSeatLayout($bus);
+
+        $this->dispatch('notify', type: 'success', message: "Видалено місце №{$num}");
+    }
+
+    // ✨ ДОДАНО: видалення елемента
+    public function deleteElement(int $elementId): void
+    {
+        $el = BusLayoutElement::where('bus_id',$this->record)->find($elementId);
+        if (! $el) return;
+
+        $t = $el->type;
+        $el->delete();
+
+        $this->loadElements();
+        $this->recalcGrid();
+        if ($bus = Bus::find($this->record)) BusLayoutSyncer::exportToSeatLayout($bus);
+
+        $this->dispatch('notify', type: 'success', message: "Елемент «{$t}» видалено");
+    }
+
+    public function addElement(string $type): void
+    {
+        BusLayoutElement::create([
+            'bus_id'=>$this->record,'type'=>$type,'x'=>0,'y'=>0,'w'=>1,'h'=>1,
+        ]);
+
+        $this->loadElements();
+        $this->recalcGrid(); // ✨
+        if ($bus = Bus::find($this->record)) BusLayoutSyncer::exportToSeatLayout($bus);
+
+        $this->dispatch('notify', type: 'success', message: 'Елемент додано');
+    }
+
+    public function setSeatType(int $seatId, ?int $seatTypeId): void
+    {
+        BusSeat::where('id', $seatId)
+            ->where('bus_id', $this->record)
+            ->update(['seat_type_id' => $seatTypeId]);
+
+        $this->loadSeats();
+        if ($bus = Bus::find($this->record)) {
+            BusLayoutSyncer::exportToSeatLayout($bus);
+        }
+        $this->dispatch('notify', type: 'success', message: 'Тип сидіння оновлено');
     }
 
     protected function getHeaderActions(): array
@@ -107,10 +199,8 @@ class LayoutBuilder extends Page
                         ->options(SeatType::query()->pluck('name', 'id'))
                         ->searchable()
                         ->native(false),
-                    Forms\Components\TextInput::make('price_modifier_abs')
-                        ->label('Δ₴')->numeric()->step('0.01'),
-                    Forms\Components\TextInput::make('price_modifier_pct')
-                        ->label('Δ%')->numeric()->step('0.01'),
+                    Forms\Components\TextInput::make('price_modifier_abs')->label('Δ₴')->numeric()->step('0.01'),
+                    Forms\Components\TextInput::make('price_modifier_pct')->label('Δ%')->numeric()->step('0.01'),
                 ])
                 ->action(function (array $data) {
                     $next = (int) BusSeat::where('bus_id', $this->record)
@@ -120,13 +210,15 @@ class LayoutBuilder extends Page
                     BusSeat::create([
                         'bus_id' => $this->record,
                         'number' => (string) $next,
-                        'x' => 0, 'y' => 0, 'is_active' => true,
+                        'x' => 0, 'y' => 0,
+                        'is_active' => true,
                         'seat_type_id' => $data['seat_type_id'] ?? null,
                         'price_modifier_abs' => $data['price_modifier_abs'] ?? null,
                         'price_modifier_pct' => $data['price_modifier_pct'] ?? null,
                     ]);
 
                     $this->loadSeats();
+                    $this->recalcGrid(); // ✨
                     if ($bus = Bus::find($this->record)) {
                         BusLayoutSyncer::exportToSeatLayout($bus);
                     }
@@ -144,29 +236,4 @@ class LayoutBuilder extends Page
             ])->label('Додати елемент')->icon('heroicon-o-cube'),
         ];
     }
-
-    public function addElement(string $type): void
-    {
-        BusLayoutElement::create([
-            'bus_id'=>$this->record,'type'=>$type,'x'=>0,'y'=>0,'w'=>1,'h'=>1
-        ]);
-        $this->loadElements();
-        if ($bus = Bus::find($this->record)) BusLayoutSyncer::exportToSeatLayout($bus);
-        $this->dispatch('notify', type: 'success', message: 'Елемент додано');
-    }
-    public function setSeatType(int $seatId, ?int $seatTypeId): void
-    {
-        \App\Models\BusSeat::where('id', $seatId)
-            ->where('bus_id', $this->record)
-            ->update(['seat_type_id' => $seatTypeId]);
-
-        $this->loadSeats();
-
-        if ($bus = \App\Models\Bus::find($this->record)) {
-            \App\Services\BusLayoutSyncer::exportToSeatLayout($bus);
-        }
-
-        $this->dispatch('notify', type: 'success', message: 'Тип сидіння оновлено');
-    }
-
 }

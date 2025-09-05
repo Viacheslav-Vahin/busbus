@@ -124,7 +124,7 @@ export default function BookingPage() {
     useEffect(() => {
         if (!busId || !date) return;
 
-        axios.get(`/api/trip/${busId}/bus-info`, { params: { date } })
+        axios.get(`/api/trips/${busId}/bus-info`, { params: { date } })
             .then(({ data }) => {
                 setBus(data.bus);
                 if (data.booked_seats) setBookedSeats(data.booked_seats.map(String));

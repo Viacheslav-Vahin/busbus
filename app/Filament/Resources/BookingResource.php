@@ -8,6 +8,8 @@ use App\Models\Booking;
 use App\Models\Bus;
 use App\Models\Route;
 use App\Models\Trip;
+use App\Models\Stop;
+use App\Models\BusStop;
 use App\Models\Discount;
 use App\Models\GlobalAccount;
 use App\Models\AdditionalService;
@@ -60,6 +62,7 @@ use Filament\Tables\Filters\TernaryFilter;
 
 //use Filament\Tables\Filters\Indicator;
 use Filament\Forms\Get;
+
 class BookingResource extends Resource
 {
     protected static ?string $model = Booking::class;
@@ -74,147 +77,199 @@ class BookingResource extends Resource
                     ->default(auth()->id())
                     ->hidden()
                     ->required(),
-                Grid::make([
-                    'default' => 3,
-                ])
+
+                Grid::make(['default' => 3])
                     ->schema([
-                        Select::make('route_id')
-                            ->label('Виїзд з:')
-                            ->options(Route::all()->pluck('start_point', 'id'))
+
+                        Hidden::make('bus_id'), // виставлятимемо автоматично після вибору рейсу
+                        Hidden::make('route_id'),
+                        Hidden::make('destination_id'),
+//                        Hidden::make('trip_id'),
+
+                        // ЗВІДКИ (stop_id)
+                        Select::make('start_stop_id')
+                            ->label('Виїзд з (зупинка)')
+                            ->options(function () {
+                                // всі зупинки, які десь використовуються як boarding
+                                $ids = BusStop::where('type', 'boarding')->pluck('stop_id')->unique();
+                                return Stop::whereIn('id', $ids)->orderBy('name')->pluck('name', 'id')->toArray();
+                            })
+                            ->reactive()
+                            ->required()
+                            ->afterStateUpdated(function (callable $set) {
+                                $set('end_stop_id', null);
+                                $set('trip_id', null);
+                                $set('bus_id', null);
+                                $set('route_id', null);
+                                $set('destination_id', null);
+                                $set('seat_layout', '[]');
+                                $set('selected_seat', null);
+                                $set('seat_number', null);
+                                $set('price', null);
+                            }),
+
+                        // КУДИ (stop_id)
+                        Select::make('end_stop_id')
+                            ->label('Прибуття до (зупинка)')
+                            ->options(function (Get $get) {
+                                $fromId = (int)$get('start_stop_id');
+                                if (!$fromId) return [];
+                                $busIds = BusStop::where('type', 'boarding')
+                                    ->where('stop_id', $fromId)
+                                    ->pluck('bus_id');
+
+// ✅ залишаємо лише автобуси з графіком
+                                $busIds = \App\Models\Bus::query()
+                                    ->whereIn('id', $busIds)
+//                                    ->hasAnySchedule()
+                                    ->pluck('id');
+
+                                $stopIds = BusStop::whereIn('bus_id', $busIds)
+                                    ->where('type', 'dropping')
+                                    ->pluck('stop_id')
+                                    ->unique();
+//                                // Знайти всі автобуси, які мають boarding на $fromId
+//                                $busIds = BusStop::where('type', 'boarding')->where('stop_id', $fromId)->pluck('bus_id');
+//
+//                                // Для цих автобусів — усі dropping stops
+//                                $stopIds = BusStop::whereIn('bus_id', $busIds)->where('type', 'dropping')->pluck('stop_id')->unique();
+
+                                return Stop::whereIn('id', $stopIds)->orderBy('name')->pluck('name', 'id')->toArray();
+                            })
                             ->reactive()
                             ->required()
                             ->afterStateUpdated(function (callable $get, callable $set) {
-                                $routeId = $get('route_id');
+                                $set('trip_id', null);
+                                $set('bus_id', null);
+                                $set('route_id', null);
+                                $set('destination_id', null);
+                                $set('seat_layout', '[]');
+                                $set('selected_seat', null);
+                                $set('seat_number', null);
+                                $set('price', null);
 
-                                if ($routeId) {
-                                    $availableDates = BookingResource::getAvailableDates($routeId);
-                                    $set('available_dates', $availableDates);
-
-                                    // Clear dependent fields
-                                    $set('date', null);
-                                    $set('bus_id', null);
-                                    $set('seat_layout', '');
-                                    $set('selected_seat', null);
-                                    $set('seat_number', null);
-                                    $set('price', null);
-                                }
+                                $set('available_dates', \App\Filament\Resources\BookingResource::getAvailableDatesByStops(
+                                    (int)$get('start_stop_id'), (int)$get('end_stop_id')
+                                ));
                             }),
-
-                        Select::make('destination_id')
-                            ->label('Прибуття у:')
-                            ->options(Route::all()->pluck('end_point', 'id'))
-                            ->reactive()
-                            ->required(),
-
-//                        Select::make('trip_id')
-//                            ->label('Виберіть поїздку')
-//                            ->options(Trip::all()->mapWithKeys(function ($trip) {
-//                                return [$trip->id => $trip->bus->name . ' - ' . $trip->start_location . ' до ' . $trip->end_location];
-//                            }))
-//                            ->reactive()
-//                            ->required()
-//                            ->afterStateUpdated(function (callable $get, callable $set) {
-//                                $tripId = $get('trip_id');
-//                                if ($tripId) {
-//                                    $trip = Trip::find($tripId);
-//                                    if ($trip) {
-//                                        $set('bus_id', $trip->bus_id);
-//                                        $basePrice = $trip->calculatePrice();
-//                                        $set('base_price', $basePrice);
-//
-//                                        $ticketType = $get('ticket_type');
-//                                        $discountId = $get('discount_id');
-//                                        $finalPrice = self::calculateFinalPrice($basePrice, $ticketType, $discountId);
-//                                        $set('price', $finalPrice);
-//
-//                                        // Load seat layout for the bus
-//                                        self::loadBusSeatLayout($trip->bus_id, $get('date'), $set);
-//                                    }
-//                                }
-//                            }),
+                        Hidden::make('available_dates')
+                            ->default([])
+                            ->dehydrated(false)
+                            ->reactive(),
+                        // ВИБІР РЕЙСУ (trip)
                         Select::make('trip_id')
-                            ->label('Виберіть поїздку')
-                            ->options(function (callable $get) {
-                                $routeId = $get('route_id');
-                                if (!$routeId) return [];
-                                return \App\Models\Trip::query()
-                                    ->whereHas('bus', fn($q) => $q->where('route_id', $routeId))
-                                    ->orderBy('departure_time')
-                                    ->get()
-                                    ->mapWithKeys(fn($t) => [
-                                        $t->id => sprintf('%s — %s → %s (%s)',
-                                            $t->bus->name, $t->start_location, $t->end_location, $t->departure_time)
-                                    ]);
-                            })
+                            ->label('Виберіть рейс')
+                            ->required()
+                            ->searchable()
                             ->reactive()
+                            ->live() // ⬅️ щоб відправлялося одразу, без onBlur
+                            ->options(function (Get $get) {
+                                $fromId = (int)$get('start_stop_id');
+                                $toId = (int)$get('end_stop_id');
+                                if (!$fromId || !$toId) return [];
+
+                                $trips = Trip::with('bus', 'startStop', 'endStop')
+                                    ->whereHas('bus', function ($q) use ($fromId, $toId) {
+                                        $q->forStops($fromId, $toId);   // ✅
+                                    })
+                                    ->where(fn($q) => $q->where('start_stop_id', $fromId)->orWhereNull('start_stop_id'))
+                                    ->where(fn($q) => $q->where('end_stop_id', $toId)->orWhereNull('end_stop_id'))
+                                    ->orderBy('departure_time')
+                                    ->get();
+
+                                $opts = [];
+                                foreach ($trips as $t) {
+                                    $bus = $t->bus;
+                                    $opts[$t->id] = sprintf('%s — %s → %s (відпр. %s, приб. %s)',
+                                        $bus->name ?? ('#' . $t->bus_id),
+                                        optional($t->startStop)->name ?? '—',
+                                        optional($t->endStop)->name ?? '—',
+                                        $t->departure_time ?: '—',
+                                        $t->arrival_time ?: '—'
+                                    );
+                                }
+                                asort($opts);
+                                return $opts;
+                            })
                             ->afterStateUpdated(function (callable $get, callable $set) {
-                                if ($trip = \App\Models\Trip::find($get('trip_id'))) {
-                                    $set('bus_id', $trip->bus_id);                 // автобус відомий з trip
-                                    $set('base_price', $trip->calculatePrice());   // ціна з trip
-                                    BookingResource::loadBusSeatLayout($trip->bus_id, $get('date'), $set);
+                                $tripId = (int)$get('trip_id');
+
+                                // почистити залежні поля відразу
+                                $set('seat_layout', '[]');
+                                $set('selected_seat', null);
+                                $set('seat_number', null);
+                                $set('seat_price', null);
+
+                                // скинути список дат щоб календар не показував старе
+                                $set('available_dates', []);
+
+                                if ($tripId) {
+                                    $trip = \App\Models\Trip::with('bus')->find($tripId);
+
+                                    $set('bus_id', $trip?->bus_id);
+                                    $set('route_id', $trip?->bus?->route_id);
+                                    $set('destination_id', $trip?->bus?->route_id);
+                                    $set('base_price', $trip?->calculatePrice() ?? 0);
+
+                                    if ($trip?->bus_id) {
+                                        $dates = self::getAvailableDatesForBus((int)$trip->bus_id);
+                                        $set('available_dates', $dates);
+
+                                        // якщо поточна дата не входить у новий список — скинемо її
+                                        $current = $get('date');
+                                        if ($current && !in_array($current, $dates, true)) {
+                                            $set('date', null);
+                                        } elseif ($current) {
+                                            // дата ок — одразу підтягнемо схему місць для нового автобуса
+                                            self::loadBusSeatLayout((int)$trip->bus_id, $current, $set);
+                                        }
+                                    }
+
+                                    self::recomputePrice($get, $set);
+                                } else {
+                                    $set('date', null);
                                 }
                             }),
 
-        DatePicker::make('date')
+                        DatePicker::make('date')
                             ->label('Дата поїздки')
                             ->required()
                             ->reactive()
+//                            ->disabled(fn(Get $get) => blank($get('trip_id'))) // не відкривати без рейсу
+                            ->extraAttributes(fn(Get $get) => [
+                                // коли міняється trip_id — інпут отримує новий key => flatpickr створюється заново
+                                'wire:key' => 'date-' . ($get('trip_id') ?? 'none'),
+                                // блокувати, поки триває оновлення trip_id
+                                'wire:loading.attr' => 'disabled',
+                                'wire:target' => 'data.trip_id',
+                            ])
                             ->afterStateUpdated(function (callable $get, callable $set) {
-                                $busId = $get('bus_id');
+                                $busId = (int)$get('bus_id');
                                 $date = $get('date');
-
                                 if ($busId && $date) {
-                                    // Reload seat layout with the new date
                                     self::loadBusSeatLayout($busId, $date, $set);
                                 }
                             })
                             ->disabledDates(function (callable $get) {
-                                $availableDates = $get('available_dates');
-                                if ($availableDates) {
-                                    $today = Carbon::today();
-                                    $nextYear = Carbon::today()->addYear();
-                                    $disabledDates = [];
+                                // ⬅️ тепер DatePicker «бачить» available_dates як залежність
+                                $available = (array)($get('available_dates') ?? []);
+                                if (!$available) return [];
 
-                                    while ($today->lte($nextYear)) {
-                                        if (!in_array($today->format('Y-m-d'), $availableDates)) {
-                                            $disabledDates[] = $today->format('Y-m-d');
-                                        }
-                                        $today->addDay();
-                                    }
-                                    return $disabledDates;
+                                $today = \Carbon\Carbon::today();
+                                $nextYear = $today->copy()->addYear();
+                                $disabled = [];
+
+                                while ($today->lte($nextYear)) {
+                                    $d = $today->format('Y-m-d');
+                                    if (!in_array($d, $available, true)) $disabled[] = $d;
+                                    $today->addDay();
                                 }
-                                return [];
+                                return $disabled;
                             })
                             ->minDate(now())
                             ->closeOnDateSelection(true)
                             ->native(false),
                     ]),
-
-                // Bus selection
-//                Select::make('bus_id')
-//                    ->label('Виберіть автобус:')
-//                    ->options(function (callable $get) {
-//                        $routeId = $get('route_id');
-//                        $date = $get('date');
-//
-//                        if ($routeId && $date) {
-//                            $buses = BookingResource::searchBuses($routeId, $date);
-//                            return $buses->pluck('name', 'id');
-//                        }
-//
-//                        return [];
-//                    })
-//                    ->reactive()
-//                    ->required()
-//                    ->afterStateUpdated(function (callable $get, callable $set) {
-//                        $busId = $get('bus_id');
-//                        $date = $get('date');
-//
-//                        if ($busId && $date) {
-//                            // Load seat layout for the selected bus
-//                            self::loadBusSeatLayout($busId, $date, $set);
-//                        }
-//                    }),
 
                 Grid::make([
                     'default' => 1,
@@ -246,18 +301,16 @@ class BookingResource extends Resource
                             ->columns(4),
                     ]),
 
-                // Hidden field to store seat layout JSON
                 Hidden::make('seat_layout')
                     ->id('seat_layout')
                     ->default('[]')
                     ->reactive(),
 
-                // Component for seat selection
                 Forms\Components\Section::make('Вибір місць')
                     ->aside()
                     ->schema([
                         Livewire::make('App\Http\Livewire\SeatSelector')
-                            ->statePath('data.seat_layout')
+                            ->statePath('seat_layout')
                             ->reactive()
                     ])
                     ->columns(1),
@@ -266,16 +319,18 @@ class BookingResource extends Resource
                     ->id('selected_seat')
                     ->statePath('selected_seat')
                     ->reactive(),
+
                 Grid::make([
                     'default' => 4,
                 ])
                     ->schema([
                         Hidden::make('seat_price')
                             ->id('seat_price')
-                            ->reactive(),
+                            ->reactive()
+                            ->afterStateUpdated(fn($state, callable $get, callable $set) => self::recomputePrice($get, $set)),
 
                         Hidden::make('seat_number')
-                            ->id('seat_number')
+                            ->id('data.seat_number')
                             ->default(fn(callable $get) => $get('selected_seat'))
                             ->dehydrated(fn($state) => !empty($state))
                             ->reactive(),
@@ -300,7 +355,6 @@ class BookingResource extends Resource
                                 $set('price', $finalPrice);
                             }),
 
-
                         Select::make('discount_id')
                             ->label('Знижка')
                             ->options(\App\Models\Discount::all()->pluck('name', 'id'))
@@ -321,7 +375,8 @@ class BookingResource extends Resource
                             ->label('Ціна')
                             ->required()
                             ->numeric()
-                            ->reactive(),
+                            ->reactive()
+                            ->id('data.price'),
 
                         Select::make('currency_code')
                             ->label('Валюта')
@@ -339,7 +394,7 @@ class BookingResource extends Resource
                                 $set('price', $finalPrice);
                             }),
                     ]),
-                // Додаткові послуги
+
                 Forms\Components\CheckboxList::make('additional_services')
                     ->label('Додаткові послуги')
                     ->options(\App\Models\AdditionalService::all()->pluck('name', 'id'))
@@ -357,6 +412,7 @@ class BookingResource extends Resource
                     }),
 
                 Hidden::make('base_price')
+                    ->default(0)
                     ->required(),
             ])
             ->statePath('data')
@@ -366,7 +422,6 @@ class BookingResource extends Resource
     /**
      * Load seat layout for a bus and update the form
      */
-
     public static function loadBusSeatLayout($busId, $date, $set)
     {
         if (!$busId || !$date) {
@@ -379,16 +434,28 @@ class BookingResource extends Resource
             return;
         }
 
-        // Отримуємо бронювання для цього автобуса на задану дату
+        //// ТУТ ЗМІНИ ДЛЯ ПОЗНАЧЕННЯ ЗАЙНЯТИХ МІСЦЬ >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        // Беремо одразу обидві колонки, виключаємо скасовані/повернені й приводимо до рядків
         $bookings = Booking::where('bus_id', $busId)
             ->whereDate('date', $date)
-            ->get()
-            ->pluck('seat_number')
-            ->toArray();
+            ->whereNotIn('status', ['cancelled', 'refunded'])
+            ->get(['seat_number', 'selected_seat'])
+            ->flatMap(function ($b) {
+                return [
+                    $b->seat_number,
+                    $b->selected_seat,
+                ];
+            })
+            ->filter()                    // прибрати null/порожні
+            ->map(fn($v) => (string)$v) // привести до рядка, щоб "12" і 12 були однакові
+            ->unique()
+            ->values()
+            ->all();
+        //// КІНЕЦЬ ЗМІН <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
-        // Позначаємо заброньовані місця
         $seatLayout = collect($bus->seat_layout)->map(function ($seat) use ($bookings) {
-            $seat['is_reserved'] = isset($seat['number']) && in_array($seat['number'], $bookings);
+            $num = isset($seat['number']) ? (string)$seat['number'] : null;
+            $seat['is_reserved'] = $num !== null && in_array($num, $bookings, true);
             return $seat;
         })->toArray();
 
@@ -397,78 +464,207 @@ class BookingResource extends Resource
         if (json_last_error() === JSON_ERROR_NONE) {
             $set('seat_layout', $seatLayoutJson);
             Log::info('Set seat_layout in form state (final)', ['json' => $seatLayoutJson]);
-            // Видаляємо виклик dispatchBrowserEvent тут!
         } else {
             Log::error('JSON Encode Error in loadBusSeatLayout (final)', ['error' => json_last_error_msg()]);
             $set('seat_layout', '[]');
         }
 
-        // Скидаємо вибір місця
         $set('selected_seat', null);
     }
 
     /**
-     * Get available dates for a route
+     * Доступні дати за from/to — через trips → bus → календар автобуса
      */
-//    public static function getAvailableDates($routeId)
-//    {
-//        $buses = Bus::where('route_id', $routeId)->get();
-//        $availableDates = [];
-//
-//        foreach ($buses as $bus) {
-//            $weeklyDays = is_string($bus->weekly_operation_days) ? json_decode($bus->weekly_operation_days, true) : $bus->weekly_operation_days;
-//            $operationDays = is_string($bus->operation_days) ? json_decode($bus->operation_days, true) : $bus->operation_days;
-//
-//            // Add weekly days
-//            $map = [
-//                'Monday'=>\Carbon\Carbon::MONDAY, 'Tuesday'=>\Carbon\Carbon::TUESDAY, /* ... */
-//            ];
-//            if (is_array($weeklyDays)) {
-//                foreach ($weeklyDays as $name) {
-//                    if (!isset($map[$name])) continue;
-//                    $first = now()->next($map[$name]); // найближчий такий день
-//                    for ($i=0; $i<12; $i++) { // наприклад, 3 місяці вперед
-//                        $availableDates[] = $first->copy()->addWeeks($i)->format('Y-m-d');
-//                    }
-//                }
-//            }
-////            if (is_array($weeklyDays)) {
-////                foreach ($weeklyDays as $day) {
-////                    $dayOfWeek = Carbon::parse($day)->dayOfWeek;
-////                    for ($i = 0; $i < 4; $i++) {
-////                        $nextAvailableDate = Carbon::now()->next($dayOfWeek)->addWeeks($i);
-////                        $availableDates[] = $nextAvailableDate->format('Y-m-d');
-////                    }
-////                }
-////            }
-//
-//            // Add specific operation days
-//            if (is_array($operationDays)) {
-//                $availableDates = array_merge($availableDates, $operationDays);
-//            }
-//        }
-//
-//        return array_unique($availableDates);
-//    }
+    public static function getAvailableDatesByCities(?string $from, ?string $to): array
+    {
+        if (!$from) return [];
+
+        $fromN = self::normalizePlace($from);
+        $toN = $to ? self::normalizePlace($to) : null;
+
+        $start = \Carbon\Carbon::today();
+        $end = $start->copy()->addDays(90);
+
+        $busIds = \App\Models\Trip::query()
+            ->where('start_location', $fromN)
+            ->when($toN, fn($q) => $q->where('end_location', $toN))
+            ->pluck('bus_id')->unique()->values()->all();
+
+        if (empty($busIds)) return [];
+
+        $dates = [];
+        $buses = \App\Models\Bus::whereIn('id', $busIds)->get();
+
+        foreach ($buses as $bus) {
+            foreach ((array)($bus->operation_days ?? []) as $od) {
+                $d = is_array($od) ? ($od['date'] ?? null) : null;
+                if ($d && $d >= $start->toDateString() && $d <= $end->toDateString()) {
+                    $dates[] = $d;
+                }
+            }
+
+            $weekly = (array)($bus->weekly_operation_days ?? []);
+            if ($weekly) {
+                $cur = $start->copy();
+                while ($cur->lte($end)) {
+                    if (self::weeklyMatches($cur, $weekly) &&
+                        (method_exists($bus, 'worksOnDate') ? $bus->worksOnDate($cur) : self::fallbackWorksOnDate($bus, $cur))) {
+                        $dates[] = $cur->toDateString();
+                    }
+                    $cur->addDay();
+                }
+            }
+        }
+
+        return array_values(array_unique($dates));
+    }
+
+    public static function getAvailableDatesForBus(int $busId): array
+    {
+        $bus = \App\Models\Bus::find($busId);
+        if (!$bus) {   // ✅
+            return [];
+        }
+
+        $start = \Carbon\Carbon::today();
+        $end = $start->copy()->addDays(90);
+
+        $dates = [];
+
+        foreach ((array)($bus->operation_days ?? []) as $od) {
+            $d = is_array($od) ? ($od['date'] ?? null) : null;
+            if ($d && $d >= $start->toDateString() && $d <= $end->toDateString()) {
+                $dates[] = $d;
+            }
+        }
+
+        $weekly = (array)($bus->weekly_operation_days ?? []);
+        if ($weekly) {
+            $cur = $start->copy();
+            while ($cur->lte($end)) {
+                if (method_exists($bus, 'worksOnDate')
+                    ? $bus->worksOnDate($cur)
+                    : self::fallbackWorksOnDate($bus, $cur)) {
+                    $dates[] = $cur->toDateString();
+                }
+                $cur->addDay();
+            }
+        }
+
+        return array_values(array_unique($dates));
+    }
+
+    protected static function weeklyMatches(Carbon $date, array $weekly): bool
+    {
+        $wanted = [];
+        foreach ($weekly as $w) {
+            $n = self::normalizeWeeklyValue($w);
+            if ($n) $wanted[] = $n; // ISO 1..7
+        }
+        if (!$wanted) return false;
+        return in_array($date->isoWeekday(), $wanted, true);
+    }
+
+    protected static function normalizeWeeklyValue($v): ?int
+    {
+        if ($v === null) return null;
+        if (is_int($v) || ctype_digit((string)$v)) {
+            $n = (int)$v;
+            return ($n >= 1 && $n <= 7) ? $n : null;
+        }
+        $s = mb_strtolower(trim((string)$v));
+
+        $map = [
+            // EN
+            'mon' => 1, 'monday' => 1,
+            'tue' => 2, 'tuesday' => 2,
+            'wed' => 3, 'wednesday' => 3,
+            'thu' => 4, 'thursday' => 4, 'thur' => 4, 'thurs' => 4,
+            'fri' => 5, 'friday' => 5,
+            'sat' => 6, 'saturday' => 6,
+            'sun' => 7, 'sunday' => 7,
+            // UA
+            'понеділок' => 1, 'вівторок' => 2, 'середа' => 3, 'четвер' => 4, 'пʼятниця' => 5, 'пятниця' => 5, 'субота' => 6, 'неділя' => 7,
+            'пн' => 1, 'вт' => 2, 'ср' => 3, 'чт' => 4, 'пт' => 5, 'сб' => 6, 'нд' => 7, 'нед' => 7,
+        ];
+
+        return $map[$s] ?? null;
+    }
+
+    protected static function fallbackWorksOnDate(\App\Models\Bus $bus, \Carbon\Carbon $date): bool
+    {
+        $weekly = (array)($bus->weekly_operation_days ?? []);
+        if ($weekly && !self::weeklyMatches($date, $weekly)) return false;
+
+        $off = collect((array)($bus->off_days ?? []))
+            ->map(fn($x) => is_array($x) ? ($x['date'] ?? null) : null)
+            ->filter()->all();
+
+        return !in_array($date->toDateString(), $off, true);
+    }
+
+    public static function getAvailableDatesByStops(?int $fromStopId, ?int $toStopId): array
+    {
+        if (!$fromStopId || !$toStopId) return [];
+
+        $start = \Carbon\Carbon::today();
+        $end = $start->copy()->addDays(90);
+
+        // усі автобуси, що реально їздять між цими зупинками
+        $busIds = \App\Models\Bus::query()
+            ->forStops($fromStopId, $toStopId)
+//            ->hasAnySchedule()                   // ✅
+            ->pluck('id')->unique()->values()->all();
+
+        if (empty($busIds)) return [];
+
+        $dates = [];
+        $buses = \App\Models\Bus::whereIn('id', $busIds)->get();
+
+        foreach ($buses as $bus) {
+            foreach ((array)($bus->operation_days ?? []) as $od) {
+                $d = is_array($od) ? ($od['date'] ?? null) : null;
+                if ($d && $d >= $start->toDateString() && $d <= $end->toDateString()) {
+                    $dates[] = $d;
+                }
+            }
+
+            $weekly = (array)($bus->weekly_operation_days ?? []);
+            if ($weekly) {
+                $cur = $start->copy();
+                while ($cur->lte($end)) {
+                    if (
+                        self::weeklyMatches($cur, $weekly) &&
+                        (method_exists($bus,'worksOnDate') ? $bus->worksOnDate($cur) : self::fallbackWorksOnDate($bus,$cur))
+                    ) {
+                        $dates[] = $cur->toDateString();
+                    }
+                    $cur->addDay();
+                }
+            }
+        }
+
+        return array_values(array_unique($dates));
+    }
+
     public static function getAvailableDates($routeId): array
     {
         $from = \Carbon\Carbon::today();
-        $to   = $from->copy()->addDays(90);
+        $to = $from->copy()->addDays(90);
 
         $dates = [];
 
         $buses = \App\Models\Bus::where('route_id', $routeId)->get();
         foreach ($buses as $bus) {
-            // явні дати
             $ops = collect($bus->operation_days ?? [])->pluck('date')->all();
             foreach ($ops as $d) if ($d >= $from->toDateString() && $d <= $to->toDateString()) $dates[] = $d;
 
-            // тижневі дні
             $weekly = (array)($bus->weekly_operation_days ?? []);
             if (!empty($weekly)) {
                 $cursor = $from->copy();
                 while ($cursor->lte($to)) {
-                    if (in_array($cursor->format('l'), $weekly, true) && $bus->worksOnDate($cursor)) {
+                    if (self::weeklyMatches($cursor, $weekly) &&
+                        (method_exists($bus, 'worksOnDate') ? $bus->worksOnDate($cursor) : self::fallbackWorksOnDate($bus, $cursor))) {
                         $dates[] = $cursor->toDateString();
                     }
                     $cursor->addDay();
@@ -497,13 +693,13 @@ class BookingResource extends Resource
                     ])
                     ->columns(2)
                     ->query(function ($query, array $data) {
-                        $query->when($data['from'] ?? null, fn ($qq, $d) => $qq->whereDate('date', '>=', $d))
-                            ->when($data['to']   ?? null, fn ($qq, $d) => $qq->whereDate('date', '<=', $d));
+                        $query->when($data['from'] ?? null, fn($qq, $d) => $qq->whereDate('date', '>=', $d))
+                            ->when($data['to'] ?? null, fn($qq, $d) => $qq->whereDate('date', '<=', $d));
                     })
                     ->indicateUsing(function (array $data): array {
                         return array_values(array_filter([
                             !empty($data['from']) ? 'З ' . \Carbon\Carbon::parse($data['from'])->format('d.m.Y') : null,
-                            !empty($data['to'])   ? 'По ' . \Carbon\Carbon::parse($data['to'])->format('d.m.Y')   : null,
+                            !empty($data['to']) ? 'По ' . \Carbon\Carbon::parse($data['to'])->format('d.m.Y') : null,
                         ]));
                     }),
 
@@ -543,9 +739,9 @@ class BookingResource extends Resource
                     ->trueLabel('З промокодом')
                     ->falseLabel('Без промокоду')
                     ->queries(
-                        fn ($query) => $query->whereNotNull('promo_code')->where('promo_code', '<>', ''),
-                        fn ($query) => $query->where(fn ($qq) => $qq->whereNull('promo_code')->orWhere('promo_code', '')),
-                        fn ($query) => $query,
+                        fn($query) => $query->whereNotNull('promo_code')->where('promo_code', '<>', ''),
+                        fn($query) => $query->where(fn($qq) => $qq->whereNull('promo_code')->orWhere('promo_code', '')),
+                        fn($query) => $query,
                     )
                     ->indicator('Промокод'),
 
@@ -556,13 +752,13 @@ class BookingResource extends Resource
                     ->trueLabel('Так')
                     ->falseLabel('Ні')
                     ->queries(
-                        fn ($query) => $query->whereNotNull('ticket_uuid'),
-                        fn ($query) => $query->whereNull('ticket_uuid'),
-                        fn ($query) => $query,
+                        fn($query) => $query->whereNotNull('ticket_uuid'),
+                        fn($query) => $query->whereNull('ticket_uuid'),
+                        fn($query) => $query,
                     )
                     ->indicator('Квиток'),
 
-                // Глобальний текстовий пошук (order/ticket/ПІБ/e-mail/телефон)
+                // Глобальний текстовий пошук
                 Filter::make('q')
                     ->label('Пошук')
                     ->form([
@@ -570,33 +766,28 @@ class BookingResource extends Resource
                             ->placeholder('Order/UUID, ПІБ, телефон, e-mail...')
                             ->autocomplete(false),
                     ])
-                    // глобальний пошук
                     ->query(function ($query, array $data) {
-                        $v = trim((string)($data['value'] ?? '')); if ($v === '') return;
+                        $v = trim((string)($data['value'] ?? ''));
+                        if ($v === '') return;
 
                         $query->where(function ($qq) use ($v) {
                             $qq->where('order_id', 'like', "%{$v}%")
                                 ->orWhere('ticket_uuid', 'like', "%{$v}%")
                                 ->orWhere('passengers->0->first_name', 'like', "%{$v}%")
-                                ->orWhere('passengers->0->last_name',  'like', "%{$v}%")
-                                ->orWhere('passengers->0->phone_number','like', "%{$v}%")
-                                ->orWhere('passengers->0->email',       'like', "%{$v}%")
-                                ->orWhereHas('user', fn ($uq) => $uq
-                                    ->where('name',   'like', "%{$v}%")
-                                    ->orWhere('surname','like', "%{$v}%")
+                                ->orWhere('passengers->0->last_name', 'like', "%{$v}%")
+                                ->orWhere('passengers->0->phone_number', 'like', "%{$v}%")
+                                ->orWhere('passengers->0->email', 'like', "%{$v}%")
+                                ->orWhereHas('user', fn($uq) => $uq
+                                    ->where('name', 'like', "%{$v}%")
+                                    ->orWhere('surname', 'like', "%{$v}%")
                                     ->orWhere('email', 'like', "%{$v}%")
                                     ->orWhere('phone', 'like', "%{$v}%"));
                         });
                     })
-
-                    ->indicateUsing(fn (array $data): array =>
-                    !empty($data['value']) ? ['Пошук: ' . $data['value']] : []
+                    ->indicateUsing(fn(array $data): array => !empty($data['value']) ? ['Пошук: ' . $data['value']] : []
                     ),
             ])
             ->filtersFormColumns(3)
-//            ->filtersTriggerAction(fn (Tables\Actions\Action $a) =>
-//            $a->label('Фільтри')->icon('heroicon-o-funnel')
-//            )
             ->persistFiltersInSession()
             ->persistSearchInSession()
             ->persistSortInSession()
@@ -684,7 +875,7 @@ class BookingResource extends Resource
                             }),
                     ])->grow(false)
                         ->extraAttributes(['class' => 'min-w-[260px]']),
-                ])->from('md'), // з md і ширше — в один ряд; на малих екранах складе в стос
+                ])->from('md'),
             ])
             ->striped()
             ->actions([
@@ -707,7 +898,7 @@ class BookingResource extends Resource
                     ->visible(fn(Booking $record) => filled($record->ticket_pdf_path) && filled($record->passengerEmail))
                     ->action(function (Booking $record) {
                         if (!$record->ticket_pdf_path || !Storage::disk('public')->exists($record->ticket_pdf_path)) {
-                            Notification::make()->title('PDF квитка відсутній')->warning()->send(); // ← було .warning()
+                            Notification::make()->title('PDF квитка відсутній')->warning()->send();
                             return;
                         }
 
@@ -717,7 +908,6 @@ class BookingResource extends Resource
                             return;
                         }
 
-                        // ↓ Саме це, про що ти питав
                         $pdfBinary = Storage::disk('public')->get($record->ticket_pdf_path);
                         Mail::to($emails)->send(new TicketPdfMail($record, $pdfBinary));
 
@@ -731,7 +921,7 @@ class BookingResource extends Resource
                     ->tooltip('Переглянути квиток (PDF)')
                     ->icon('heroicon-o-document-text')
                     ->visible(fn(Booking $record) => filled($record->ticket_pdf_path) && filled($record->passengerEmail))
-                    ->url(fn(Booking $record) => $record->stable_pdf_url) // контролер сам побудує, якщо треба
+                    ->url(fn(Booking $record) => $record->stable_pdf_url)
                     ->openUrlInNewTab(),
 
                 Tables\Actions\Action::make('download_ticket')
@@ -755,33 +945,21 @@ class BookingResource extends Resource
                     ->tooltip('Бухгалтерський звіт')
                     ->icon('heroicon-o-document-text')
                     ->color('warning')
-                    ->visible(fn($record) => true) // або лише для paid
-//                    ->action(function (\App\Models\Booking $record) {
-//                        $data = [
-//                            'b' => $record->load(['bus', 'route', 'currency', 'user']),
-//                            'company' => CompanyProfile::first(), // або firstOrNew([])
-//                        ];
-//                        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.ticket-accounting', $data)
-//                            ->setPaper('a4', 'portrait');
-//
-//                        return response()->streamDownload(
-//                            fn() => print($pdf->output()),
-//                            'ticket_accounting_' . $record->id . '.pdf'
-//                        );
-//                    }),
+                    ->visible(fn($record) => true)
                     ->action(function (\App\Models\Booking $record) {
                         $b = $record->load(['bus', 'route', 'currency', 'user']);
 
-                        // зібрати IDs додаткових послуг із різних форматів (["1","2"] або {"ids":[...]})
                         $ids = collect($b->additional_service_ids ?? []);
                         if ($ids->isEmpty()) {
                             $raw = $b->additional_services ?? [];
-                            if (is_string($raw)) { $raw = json_decode($raw, true) ?: []; }
+                            if (is_string($raw)) {
+                                $raw = json_decode($raw, true) ?: [];
+                            }
                             $raw = (is_array($raw) && isset($raw['ids']) && is_array($raw['ids'])) ? $raw['ids'] : $raw;
 
                             $ids = collect($raw)->flatten()->map(
-                                fn ($i) => is_array($i) ? ($i['id'] ?? $i['service_id'] ?? null)
-                                    : (is_numeric($i) ? (int) $i : null)
+                                fn($i) => is_array($i) ? ($i['id'] ?? $i['service_id'] ?? null)
+                                    : (is_numeric($i) ? (int)$i : null)
                             )->filter()->values();
                         }
 
@@ -789,18 +967,18 @@ class BookingResource extends Resource
                             ? \App\Models\AdditionalService::whereIn('id', $ids)->get()
                             : collect();
 
-                        $extraSum   = (float) $additionalServices->sum('price');
-                        $grandTotal = (float) ($b->price ?? 0) + $extraSum;
+                        $extraSum = (float)$additionalServices->sum('price');
+                        $grandTotal = (float)($b->price ?? 0) + $extraSum;
 
                         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.ticket-accounting', [
-                            'b'                   => $b,
-                            'company'             => \App\Models\CompanyProfile::first(),
-                            'additionalServices'  => $additionalServices,
-                            'grandTotal'          => $grandTotal,
+                            'b' => $b,
+                            'company' => \App\Models\CompanyProfile::first(),
+                            'additionalServices' => $additionalServices,
+                            'grandTotal' => $grandTotal,
                         ])->setPaper('a4', 'portrait');
 
-                        return response()->streamDownload(fn () => print($pdf->output()),
-                            'ticket_accounting_'.$record->id.'.pdf');
+                        return response()->streamDownload(fn() => print($pdf->output()),
+                            'ticket_accounting_' . $record->id . '.pdf');
                     }),
 
                 Tables\Actions\Action::make('send_payment_link')
@@ -811,7 +989,6 @@ class BookingResource extends Resource
                     ->action(function (\App\Models\Booking $record) {
                         $url = route('pay.show', $record->order_id);
                         $msg = "Оплата вашого замовлення:\n{$url}";
-                        // канали
                         if ($record->user?->email) {
                             \Mail::raw($msg, fn($m) => $m->to($record->user->email)->subject('Оплата замовлення'));
                             \App\Models\NotificationLog::create(['type' => 'payment_link', 'channel' => 'email', 'booking_id' => $record->id, 'order_id' => $record->order_id, 'to' => $record->user->email, 'status' => 'sent']);
@@ -820,7 +997,7 @@ class BookingResource extends Resource
                             \App\Services\ViberSender::sendInvoice($record->passengerPhone ?? $record->user->phone, $msg);
                             \App\Models\NotificationLog::create(['type' => 'payment_link', 'channel' => 'viber', 'booking_id' => $record->id, 'order_id' => $record->order_id, 'to' => $record->passengerPhone ?? $record->user->phone, 'status' => 'sent']);
                         }
-                        // Telegram через збережений chat_id у payment_meta
+
                         $meta = is_string($record->payment_meta)
                             ? json_decode($record->payment_meta, true) ?: []
                             : ($record->payment_meta ?? []);
@@ -830,16 +1007,15 @@ class BookingResource extends Resource
                         if ($tgChatId && class_exists(\App\Services\TelegramSender::class)) {
                             \App\Services\TelegramSender::sendInvoice($tgChatId, $msg);
                             \App\Models\NotificationLog::create([
-                                'type'       => 'payment_link',
-                                'channel'    => 'telegram',
+                                'type' => 'payment_link',
+                                'channel' => 'telegram',
                                 'booking_id' => $record->id,
-                                'order_id'   => $record->order_id,
-                                'to'         => (string)$tgChatId,
-                                'status'     => 'sent',
+                                'order_id' => $record->order_id,
+                                'to' => (string)$tgChatId,
+                                'status' => 'sent',
                             ]);
                         } else {
-                            // ще не прив’язаний чат — даємо deep-link для клієнта
-                            $bot = config('services.telegram.bot_username'); // без @
+                            $bot = config('services.telegram.bot_username');
                             if ($bot) {
                                 $deepLink = "https://t.me/{$bot}?start={$record->order_id}";
                                 \Filament\Notifications\Notification::make()
@@ -957,34 +1133,29 @@ class BookingResource extends Resource
                     ->icon('heroicon-o-adjustments-vertical'),
 
                 ...GlobalAccount::all()->map(function ($account) {
-                    $logoUrl = asset('images/logos/' . $account->id . '.png'); // або '.svg' / $account->slug . '.png'
+                    $logoUrl = asset('images/logos/' . $account->id . '.png');
 
                     return Tables\Actions\Action::make('send_account_' . $account->id)
-                        // Вставляємо HTML-<img> як label. HtmlString не ескейпиться у Blade, тому картинка відрендериться.
                         ->label(fn() => new HtmlString(
                             '<img src="' . $logoUrl . '" alt="' . e($account->title) . '" style="height:15px;display:block;" />'
                         ))
                         ->tooltip('Відправити рахунок клієнту')
-                        ->extraAttributes([
-                            'style' => 'padding:3px 5px; min-width:20px;'
-                        ])
+                        ->extraAttributes(['style' => 'padding:3px 5px; min-width:20px;'])
                         ->color('info')
                         ->action(function ($record) use ($account) {
-                            // --- Ось тут формуємо красивий меседж ---
-                            $passenger = $record->passengers[0] ?? null; // якщо їх декілька, можна вибирати іншим способом
-                            $route = $record->route_display; // або $record->route->displayName
-                            $trip = $record->trip; // отримати модель Trip, якщо треба час
-                            $bus = $record->bus; // якщо треба
-                            $accountTitle = $account->title; // реквізити
-                            $accountDetails = $account->details; // реквізити
+                            $passenger = $record->passengers[0] ?? null;
+                            $route = $record->route_display;
+                            $trip = $record->trip;
+                            $bus = $record->bus;
                             $accountTitle = $account->title;
+                            $accountDetails = $account->details;
                             $bookingId = $record->id;
 
                             $date = \Carbon\Carbon::parse($record->date)->format('d.m.Y');
-                            $time = $trip->departure_time ?? '12:00'; // підлаштуй якщо поле інше
+                            $time = $trip->departure_time ?? '12:00';
                             $seat = $record->selected_seat ?? '-';
                             $sum = $record->price;
-                            $purpose = "Оплата за послуги бронювання $bookingId"; // можеш додати більше тексту
+                            $purpose = "Оплата за послуги бронювання $bookingId";
 
                             $message = <<<MSG
 🔔 Продовження бронювання – важлива інформація!
@@ -1016,13 +1187,11 @@ $purpose
 https://maxbus.com.ua/info/
 MSG;
 
-                            // --- Viber ---
                             \App\Services\ViberSender::sendInvoice(
                                 $passenger ? $passenger['phone_number'] : $record->passengerPhone,
                                 $message
                             );
 
-                            // --- Telegram ---
                             $meta = is_string($record->payment_meta)
                                 ? json_decode($record->payment_meta, true) ?: []
                                 : ($record->payment_meta ?? []);
@@ -1055,15 +1224,13 @@ MSG;
                     ->form([
                         DatePicker::make('from')->label('З дати'),
                         DatePicker::make('to')->label('По дату'),
-//                        Select::make('route_id')->label('Маршрут')
-//                            ->options(\App\Models\Route::pluck('start_point', 'id')->map(fn($v, $k) => $v . '')->all()),
                         Select::make('route_id')
                             ->label('Маршрут')
                             ->options(
                                 \App\Models\Route::query()
                                     ->selectRaw("id, CONCAT(start_point, ' → ', end_point) AS title")
                                     ->orderBy('start_point')->orderBy('end_point')
-                                    ->pluck('title','id')
+                                    ->pluck('title', 'id')
                             )
                             ->reactive(),
                         Select::make('bus_id')->label('Автобус')
@@ -1088,7 +1255,7 @@ MSG;
                         FileUpload::make('file')->label('Файл')
                             ->acceptedFileTypes(['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
                             ->required()
-                            ->storeFiles(false), // НЕ зберігати в storage
+                            ->storeFiles(false),
                     ])
                     ->action(function (array $data, \Filament\Notifications\Notification $n) {
                         $tmp = $data['file']->getRealPath();
@@ -1170,12 +1337,10 @@ MSG;
                     ->action(function (\Illuminate\Support\Collection $records) {
                         $sent = 0;
                         foreach ($records as $b) {
-                            // вирахуємо, яке саме нагадування доречне
                             $departAt = \Carbon\Carbon::parse($b->date . ' ' . $b->trip?->departure_time);
                             $now = now();
-                            $kind = $departAt->diffInHours($now) > 3 ? '24h' : '2h'; // грубо
+                            $kind = $departAt->diffInHours($now) > 3 ? '24h' : '2h';
                             $cmd = app(\App\Console\Commands\SendTripReminders::class);
-                            // використаємо її метод напряму
                             $ref = new \ReflectionClass($cmd);
                             $m = $ref->getMethod('sendForBooking');
                             $m->setAccessible(true);
@@ -1195,43 +1360,24 @@ MSG;
         ];
     }
 
-//    public static function searchBuses($routeId, $date)
-//    {
-//        // Format date to check day of week
-//        $dayOfWeek = date('l', strtotime($date));
-//
-//        // Find buses for the route that operate on this day
-//        $buses = Bus::where('route_id', $routeId)
-//            ->where(function ($query) use ($dayOfWeek, $date) {
-//                $query->whereJsonContains('weekly_operation_days', $dayOfWeek)
-//                    ->orWhereJsonContains('operation_days', $date);
-//            })
-//            ->get();
-//
-//        return $buses;
-//    }
     public static function searchBuses($routeId, $date)
     {
         $dateObj = \Carbon\Carbon::parse($date);
-        $buses   = \App\Models\Bus::where('route_id', $routeId)->get();
+        $buses = \App\Models\Bus::where('route_id', $routeId)->get();
 
-        return $buses->filter(fn($bus) => $bus->worksOnDate($dateObj));
+        return \App\Models\Bus::where('route_id', $routeId)
+            ->hasAnySchedule()                  // ✅
+            ->get()
+            ->filter(fn($bus) => $bus->worksOnDate($dateObj));
     }
 
-    /**
-     * Calculate final price based on ticket type and discounts
-     */
     private static function calculateFinalPrice($basePrice, $ticketType, $discountId)
     {
-        if (!$basePrice) {
-            return 0;
-        }
+        if (!$basePrice) return 0;
 
-        // Apply ticket type (child ticket has 20% discount)
         $ticketTypeDiscount = $ticketType === 'child' ? 0.8 : 1.0;
         $finalPrice = $basePrice * $ticketTypeDiscount;
 
-        // Apply discount
         if ($discountId) {
             $discount = Discount::find($discountId);
             if ($discount) {
@@ -1242,6 +1388,14 @@ MSG;
         return max(round($finalPrice, 2), 0);
     }
 
+    private static function normalizePlace(?string $s): string
+    {
+        $s = (string)$s;
+        $s = str_replace("\xC2\xA0", ' ', $s);
+        $s = preg_replace('/\s+/u', ' ', trim($s));
+        return $s;
+    }
+
     private static function calculateTotalPrice(
         $seatOrBasePrice, $ticketType, $discountId, $additionalServiceIds = [], $currencyCode = 'UAH'
     )
@@ -1250,11 +1404,9 @@ MSG;
             return 0;
         }
 
-        // 1. Тип квитка (дитячий)
         $ticketTypeDiscount = $ticketType === 'child' ? 0.8 : 1.0;
         $finalPrice = $seatOrBasePrice * $ticketTypeDiscount;
 
-        // 2. Дисконт
         if ($discountId) {
             $discount = Discount::find($discountId);
             if ($discount) {
@@ -1262,14 +1414,12 @@ MSG;
             }
         }
 
-        // 3. Додаткові послуги (додаємо в гривнях)
         $servicesTotal = 0;
         if (!empty($additionalServiceIds)) {
             $servicesTotal = \App\Models\AdditionalService::whereIn('id', $additionalServiceIds)->sum('price');
         }
         $finalPrice += $servicesTotal;
 
-        // 4. Валюта (множимо на курс)
         if ($currencyCode !== 'UAH') {
             $currency = \App\Models\Currency::find($currencyCode);
             $rate = $currency ? $currency->rate : 1;
@@ -1281,6 +1431,19 @@ MSG;
         return $finalPrice;
     }
 
+    private static function recomputePrice(callable $get, callable $set): void
+    {
+        $ticketType = $get('ticket_type') ?? 'adult';
+        $discountId = $get('discount_id');
+        $currencyCode = $get('currency_code') ?? 'UAH';
+        $baseOrSeatPrice = $get('seat_price') ?? $get('base_price') ?? 0;
+        $additionalServices = $get('additional_services') ?? [];
+
+        $final = self::calculateTotalPrice(
+            $baseOrSeatPrice, $ticketType, $discountId, $additionalServices, $currencyCode
+        );
+        $set('price', $final);
+    }
 
     public static function getModelLabel(): string
     {
@@ -1296,6 +1459,4 @@ MSG;
     {
         return 'Бронювання';
     }
-
-
 }

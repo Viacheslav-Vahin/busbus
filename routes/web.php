@@ -31,6 +31,7 @@ Route::view('/', 'index');
 
 // AJAX/формочки
 Route::post('/get-buses-by-date', [RouteScheduleController::class, 'getBusesByDate']);
+Route::get('/routes/{route}/available-dates', [RouteScheduleController::class, 'getAvailableDates']);
 Route::post('/booking/store', [BookingController::class, 'store'])->name('booking.store');
 
 // Публічні квитки

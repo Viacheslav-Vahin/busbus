@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 
 class Bus extends Model
 {
@@ -45,8 +46,7 @@ class Bus extends Model
             $model->has_off_days       = $model->has_off_days ?? false;
         });
 
-        // НЕ кодуємо seat_layout у рядок — каст 'array' зробить це сам.
-        // Тут лише розкодовуємо, якщо раптом прийшов рядок JSON.
+        // якщо seat_layout чомусь прийшов рядком — розкодовуємо
         static::saving(function ($bus) {
             if (is_string($bus->seat_layout)) {
                 $decoded = json_decode($bus->seat_layout, true);
@@ -57,7 +57,7 @@ class Bus extends Model
         });
     }
 
-    /* ===================== Релейшени (без змін) ===================== */
+    /* ===================== Релейшени ===================== */
 
     public function route()
     {
@@ -106,9 +106,7 @@ class Bus extends Model
         return $this->hasMany(\App\Models\BusSeat::class);
     }
 
-    /**
-     * Масове збереження зупинок (без змін у твоїй логіці).
-     */
+    /** Масове збереження зупинок */
     public function saveBusStops($bus, $data)
     {
         $bus->busStops()->delete();
@@ -134,77 +132,18 @@ class Bus extends Model
         }
     }
 
-    /* ===================== Нормалізація дат ===================== */
+    /* ===================== Scopes ===================== */
 
-    /**
-     * Приймає:
-     *  - рядок JSON;
-     *  - ["2025-01-04", ...];
-     *  - [{"date":"2025-01-04"}, ...]
-     * і зберігає у вигляді [{"date":"YYYY-MM-DD"}, ...]
-     */
-    public function setOperationDaysAttribute($value): void
+    /** Автобуси, що мають посадку на $fromStopId і висадку на $toStopId */
+    public function scopeForStops($q, int $fromStopId, int $toStopId)
     {
-        $this->attributes['operation_days'] = json_encode(
-            $this->normalizeDateList($value),
-            JSON_UNESCAPED_UNICODE
-        );
-    }
-
-    public function setOffDaysAttribute($value): void
-    {
-        $this->attributes['off_days'] = json_encode(
-            $this->normalizeDateList($value),
-            JSON_UNESCAPED_UNICODE
-        );
-    }
-
-    private function normalizeDateList($value): array
-    {
-        if (is_string($value)) {
-            $decoded = json_decode($value, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $value = $decoded;
-            }
-        }
-
-        $out = [];
-        foreach ((array) $value as $row) {
-            if (is_string($row)) {
-                $d = $this->fmtDate($row);
-                if ($d) $out[] = ['date' => $d];
-                continue;
-            }
-            if (is_array($row)) {
-                $d = $row['date'] ?? (is_string(reset($row)) ? reset($row) : null);
-                $d = $this->fmtDate($d);
-                if ($d) $out[] = ['date' => $d];
-            }
-        }
-
-        return $out;
-    }
-
-    private function fmtDate(?string $s): ?string
-    {
-        if (!$s) return null;
-        try {
-            return Carbon::parse($s)->toDateString();
-        } catch (\Throwable) {
-            return null;
-        }
+        return $q->whereHas('busStops', fn($qq) => $qq->where('type', 'boarding')->where('stop_id', $fromStopId))
+            ->whereHas('busStops', fn($qq) => $qq->where('type', 'dropping')->where('stop_id', $toStopId));
     }
 
     /* ===================== Логіка розкладу ===================== */
 
-    /**
-     * Єдина перевірка: чи працює автобус у конкретну дату.
-     * Враховує:
-     *  - off_days (мають пріоритет — якщо дата в off_days, повертає false)
-     *  - operation_days (whitelist, якщо has_operation_days = true)
-     *  - weekly_operation_days (припускаємо, що це ["Monday", ...])
-     * Якщо жодне не задано — вважаємо, що працює кожного дня.
-     */
+    /** Чи працює автобус у конкретну дату */
     public function worksOnDate(\DateTimeInterface|string $date): bool
     {
         $d   = $date instanceof \DateTimeInterface ? Carbon::instance($date) : Carbon::parse($date);
@@ -227,5 +166,57 @@ class Bus extends Model
         }
 
         return true;
+    }
+
+    /** Список дозволених дат у проміжку */
+    public function allowedDates(Carbon $start, int $days = 180): array
+    {
+        $end = $start->copy()->addDays($days);
+        $dates = [];
+
+        foreach ((array)($this->operation_days ?? []) as $od) {
+            $d = is_array($od) ? ($od['date'] ?? null) : null;
+            if ($d && $d >= $start->toDateString() && $d <= $end->toDateString()) {
+                $dates[] = $d;
+            }
+        }
+
+        $weekly = (array)($this->weekly_operation_days ?? []);
+        if ($weekly) {
+            $cur = $start->copy();
+            while ($cur->lte($end)) {
+                if ($this->worksOnDate($cur)) {
+                    $dates[] = $cur->toDateString();
+                }
+                $cur->addDay();
+            }
+        }
+
+        return array_values(array_unique($dates));
+    }
+
+    // є якийсь розклад (або конкретні дати, або тижневий графік)
+    public function scopeHasAnySchedule(Builder $q): Builder
+    {
+        return $q->where(function ($qq) {
+            // якщо є службові прапорці — використовуємо їх
+            $qq->where('has_operation_days', true)
+                // або фактичні JSON масиви
+                ->orWhere(function ($q) {
+                    $q->whereNotNull('operation_days')
+                        ->whereRaw('JSON_LENGTH(operation_days) > 0');
+                })
+                ->orWhere(function ($q) {
+                    $q->whereNotNull('weekly_operation_days')
+                        ->whereRaw('JSON_LENGTH(weekly_operation_days) > 0');
+                });
+        });
+    }
+
+    public function hasAnySchedule(): bool
+    {
+        $ops    = (array) ($this->operation_days ?? []);
+        $weekly = (array) ($this->weekly_operation_days ?? []);
+        return ($this->has_operation_days ?? false) || !empty($ops) || !empty($weekly);
     }
 }

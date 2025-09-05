@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Bus;
+use App\Models\Trip;
 use App\Models\Booking;
 use App\Models\User;
 use App\Models\SeatHold;
@@ -18,10 +19,7 @@ use Illuminate\Support\Facades\Log;
 
 class BookingController extends Controller
 {
-    /**
-     * Генерація підпису для WayForPay
-     */
-//    protected function generateWayForPaySignature(array $data, string $secret): string
+    /** Генерація підпису для WayForPay */
     public static function generateWayForPaySignature(array $data, string $secret): string
     {
         $fields = [
@@ -40,9 +38,7 @@ class BookingController extends Controller
         return hash_hmac('md5', implode(';', $fields), $secret);
     }
 
-    /**
-     * (Адмін) Створення базового бронювання
-     */
+    /** (Адмін) Створення базового бронювання */
     public function store(Request $request)
     {
         $validatedData = $request->validate([
@@ -67,13 +63,12 @@ class BookingController extends Controller
         return redirect()->route('booking.index')->with('success', 'Бронювання створено успішно!');
     }
 
-    /**
-     * Публічний API: інфо про автобус + зайняті місця на дату
-     */
+    /** Публічний API: інфо про рейс + зайняті місця на дату */
     public function getBusInfo($tripId, Request $request)
     {
         $date = $request->query('date');
-        $bus  = Bus::findOrFail((int) $tripId);
+        $trip = Trip::with('bus')->findOrFail((int) $tripId);
+        $bus  = $trip->bus;
 
         $bookedSeats = Booking::where('bus_id', $bus->id)
             ->whereDate('date', $date)
@@ -82,16 +77,23 @@ class BookingController extends Controller
             ->toArray();
 
         return response()->json([
+            'trip' => [
+                'id'          => $trip->id,
+                'bus_id'      => $bus->id,
+                'departure'   => $trip->departure_time,
+                'arrival'     => $trip->arrival_time,
+            ],
             'bus' => [
                 'id'          => $bus->id,
                 'seat_layout' => $bus->seat_layout,
                 'name'        => $bus->name,
+                'registration_number' => $bus->registration_number,
             ],
             'booked_seats' => $bookedSeats,
         ]);
     }
 
-    public function checkPromo(Request $r)
+    public function checkPromo(\Illuminate\Http\Request $r)
     {
         $code = (string) $r->query('code');
         $sumUah = (float) $r->query('subtotal_uah', 0);
@@ -100,7 +102,7 @@ class BookingController extends Controller
             return response()->json(['ok' => false, 'discount_uah' => 0]);
         }
 
-        $promo = PromoCode::active()->where('code', PromoCode::normalize($code))->first();
+        $promo = \App\Models\PromoCode::active()->where('code', \App\Models\PromoCode::normalize($code))->first();
         if (!$promo || ($promo->min_amount && $sumUah < (float) $promo->min_amount)) {
             return response()->json(['ok' => false, 'discount_uah' => 0]);
         }
@@ -120,7 +122,8 @@ class BookingController extends Controller
 
 
     /**
-     * Публічний API: бронювання (hold + без сусіда + валюта + промокод)
+     * Публічний API: бронювання (hold + без сусіда + валюта + промокод).
+     * ВАЖЛИВО: trip_id — це id з таблиці trips (а не buses).
      */
     public function bookSeat(Request $request)
     {
@@ -128,7 +131,7 @@ class BookingController extends Controller
 
         // 0) Валідація
         $request->validate([
-            'trip_id'       => ['required','integer','exists:buses,id'], // trip_id == bus_id
+            'trip_id'       => ['required','integer','exists:trips,id'],
             'date'          => ['required','date'],
             'seats'         => ['required','array','min:1'],
             'seats.*'       => ['integer'],
@@ -171,7 +174,12 @@ class BookingController extends Controller
             }
         }
 
-        $busId     = (int) $data['trip_id'];
+        // 1.1 Отримаємо рейс і автобус
+        $tripId    = (int) $data['trip_id'];
+        $trip      = Trip::with('bus')->findOrFail($tripId);
+        $bus       = $trip->bus;
+        $busId     = $bus->id;
+
         $date      = $data['date'];
         $requested = array_values(array_unique(array_map('intval', $data['seats'])));
         $holdToken = $data['hold_token'] ?? null;
@@ -222,8 +230,7 @@ class BookingController extends Controller
             }
         }
 
-        // 3) Layout мапа number->row/column (якщо знадобиться для сусіда)
-        $bus        = Bus::findOrFail($busId);
+        // 3) Layout
         $layoutRaw  = is_string($bus->seat_layout) ? json_decode($bus->seat_layout, true) : $bus->seat_layout;
         $layoutArr  = is_array($layoutRaw) ? $layoutRaw : [];
 
@@ -274,14 +281,13 @@ class BookingController extends Controller
             }
         }
 
-        // 5) Розрахунок у UAH (єдиний прохід)
+        // 5) Розрахунок у UAH (як у вас)
         $extrasPrices = (array) config('booking.extras_prices', []); // coffee=>30, ...
         $extrasMap    = (array) config('booking.extras_map', []);    // coffee=>"1", ...
 
         $childPct = (float) config('booking.child_discount_pct', 10);
         $soloPct  = (float) config('booking.solo_discount_pct', 20);
 
-        // map вхідних пасажирів
         $passengersInput = [];
         foreach (($data['passengers'] ?? []) as $p) {
             $seatNum = (int) ($p['seat'] ?? 0);
@@ -295,7 +301,6 @@ class BookingController extends Controller
             ];
         }
 
-        // Функція визначення базової ціни для сидіння (UAH) через PriceRule
         $resolveSeatPriceUah = function (int $seat) use ($bus, $date): float {
             $q = PriceRule::query()->where('is_active', 1)
                 ->where(function ($qq) use ($date) {
@@ -315,7 +320,6 @@ class BookingController extends Controller
 
             if ($rules->count()) return (float) $rules->first()->amount_uah;
 
-            // фолбек — з seat_layout
             foreach ((array) $bus->seat_layout as $item) {
                 if (($item['type'] ?? '') === 'seat' && (int) $item['number'] === $seat) {
                     return (float) ($item['price'] ?? 0);
@@ -352,7 +356,6 @@ class BookingController extends Controller
             ];
         }
 
-        // SOLO: -% на дешевше місце
         if ($solo && count($toCreate) === 2) {
             $i = $toCreate[0]['seat_uah'] <= $toCreate[1]['seat_uah'] ? 0 : 1;
             $toCreate[$i]['seat_uah'] = round($toCreate[$i]['seat_uah'] * (1 - $soloPct / 100), 2);
@@ -375,7 +378,7 @@ class BookingController extends Controller
         $totalUah = max($subtotalUah - $discountUah, 0.0);
         $convert  = fn (float $uah) => round($uah * $fx, 2);
 
-        // 6) Перевірка гонки перед створенням
+        // 6) Перевірка гонки
         $conflict = Booking::where('bus_id', $busId)
             ->whereDate('date', $date)
             ->whereIn('seat_number', array_column($toCreate, 'number'))
@@ -414,7 +417,7 @@ class BookingController extends Controller
             ]];
 
             Booking::create([
-                'trip_id'       => $bus->trip_id ?? 1,
+                'trip_id'       => $trip->id,
                 'route_id'      => $bus->route_id,
                 'bus_id'        => $bus->id,
                 'selected_seat' => $seat['number'],
@@ -436,8 +439,8 @@ class BookingController extends Controller
 
                 'currency_code'   => $currencyCode,
                 'fx_rate'         => $fx,
-                'price'           => $convert($lineAfterUah), // у вибраній валюті
-                'price_uah'       => $lineAfterUah,          // фіксована сума в UAH
+                'price'           => $convert($lineAfterUah),
+                'price_uah'       => $lineAfterUah,
                 'discount_amount' => $shareUah,
                 'promo_code'      => $promoCodeRaw ? PromoCode::normalize($promoCodeRaw) : null,
                 'pricing'         => [
@@ -447,11 +450,11 @@ class BookingController extends Controller
             ]);
         }
 
-        // ---- миттєві нотифікації покупцю (НЕ квиток, а підтвердження бронювання/інвойс) ----
+        // ---- нотифікації покупцю ----
         try {
             $routeName = $bus->description ?? ($bus->name ?? 'Рейс');
             $sumUah    = number_format($totalUah, 2, '.', ' ');
-            $link      = url('/payment/return'); // або свій "Мої замовлення"
+            $link      = url('/payment/return');
 
             $msg = "✅ Бронювання створено\n"
                 . "Рейс: {$routeName}\n"
@@ -461,17 +464,6 @@ class BookingController extends Controller
                 . "Order ID: {$orderId}\n"
                 . "Посилання: {$link}";
 
-            // Viber (якщо сервіс є в проєкті)
-//            if (!empty($data['phone']) && class_exists(\App\Services\ViberSender::class)) {
-//                \App\Services\ViberSender::sendInvoice($data['phone'], $msg);
-//            }
-//
-//            // Telegram (якщо є ідентифікатор — з фронта або з профілю)
-//            if (!empty($data['telegram']) && class_exists(\App\Services\TelegramSender::class)) {
-//                \App\Services\TelegramSender::sendInvoice($data['telegram'], $msg);
-//            }
-
-            // Email простим текстом (без окремого Mailable)
             if (!empty($user->email)) {
                 \Illuminate\Support\Facades\Mail::raw($msg, function ($m) use ($user) {
                     $m->to($user->email)->subject('Бронювання створено');
@@ -481,7 +473,6 @@ class BookingController extends Controller
             Log::warning('Booking notify failed', ['e' => $e->getMessage(), 'order' => $orderId]);
         }
 
-        // 8) Звільняємо hold цього токена
         if ($holdToken) {
             SeatHold::where('token', $holdToken)->delete();
         }
@@ -512,12 +503,8 @@ class BookingController extends Controller
             'clientEmail'          => $user->email,
             'clientPhone'          => $user->phone ?? '',
             'defaultPaymentSystem' => 'card',
-//            'serviceUrl'           => route('wayforpay.webhook'),
-//            'returnUrl'            => url('/payment/return'),
-            'serviceUrl' => $serviceUrl, // той єдиний, що ти лишиш
+            'serviceUrl' => $serviceUrl,
             'returnUrl'  => route('payment.return'),
-//            'serviceUrl' => route('payment.wfp.webhook'),     // вебхук
-//            'returnUrl'  => url('/api/payment/return').'?order='.$orderId, // щоб сторінка знала що показувати
         ];
         Log::info('WFP-FORM', compact('serviceUrl'));
         $fields['merchantSignature'] = $this->generateWayForPaySignature(
@@ -538,7 +525,6 @@ class BookingController extends Controller
         $form .= '<button type="submit">Сплатити</button></form>';
         $form .= '<script>document.getElementById("wayforpay").submit();</script>';
 
-        // 10) Відповідь
         return response()->json([
             'payment_form' => $form,
             'order_id'     => $orderId,

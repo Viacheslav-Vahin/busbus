@@ -1,75 +1,120 @@
 <?php
-// app/Http/Controllers/RouteScheduleController
+// app/Http/Controllers/RouteScheduleController.php
+
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\RouteSchedule;
-use Illuminate\Support\Carbon;
+use App\Models\Route as BusRoute;
+use App\Models\Bus;
+use App\Models\Trip;
+use App\Models\BusStop;
+use App\Models\Stop;
+use App\Models\Booking;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class RouteScheduleController extends Controller
 {
-//    public function getBusesByDate(Request $request): \Illuminate\Http\JsonResponse
-//    {
-//        $buses = RouteSchedule::where('route_id', $request->route_id)
-//            ->where('date', $request->date)
-//            ->with('bus')
-//            ->get();
-//
-//        return response()->json($buses);
-//    }
-
-
     public function getBusesByDate(Request $request)
     {
         $routeId = $request->input('route_id');
-        $date = $request->input('date');
-        $weekday = \Carbon\Carbon::parse($date)->format('l'); // Наприклад "Tuesday"
+        $date    = $request->input('date');
 
-        $buses = \App\Models\Bus::where('route_id', $routeId)
+        $route  = BusRoute::findOrFail($routeId);
+        $dateObj = Carbon::parse($date);
+
+        // ті ж самі критерії: пара boarding/dropping за назвами зупинок
+        $boardingBusIds = DB::table('bus_stops')
+            ->join('stops', 'stops.id', '=', 'bus_stops.stop_id')
+            ->where('bus_stops.type', 'boarding')
+            ->where('stops.name', $route->start_point)
+            ->pluck('bus_stops.bus_id');
+
+        $droppingBusIds = DB::table('bus_stops')
+            ->join('stops', 'stops.id', '=', 'bus_stops.stop_id')
+            ->where('bus_stops.type', 'dropping')
+            ->where('stops.name', $route->end_point)
+            ->pluck('bus_stops.bus_id');
+
+        $buses = Bus::whereIn('id', $boardingBusIds)
+            ->whereIn('id', $droppingBusIds)
             ->get();
-
-        $tripsByBusId = \App\Models\Trip::where('id', $routeId)
-            ->whereIn('bus_id', $buses->pluck('id'))
-            ->get()
-            ->keyBy('bus_id');
 
         $results = [];
 
         foreach ($buses as $bus) {
-            // Витягуємо зупинки
-            $boarding = \App\Models\BusStop::where('bus_id', $bus->id)->where('type', 'boarding')->first();
-            $dropping = \App\Models\BusStop::where('bus_id', $bus->id)->where('type', 'dropping')->first();
-            $startLocation = $boarding ? \App\Models\Stop::find($boarding->stop_id)->name : '';
-            $endLocation = $dropping ? \App\Models\Stop::find($dropping->stop_id)->name : '';
-            $departureTime = $boarding ? $boarding->time : '';
-            $arrivalTime = $dropping ? $dropping->time : '';
+            if (!$this->busRunsOnDate($bus, $dateObj)) {
+                continue;
+            }
 
-            // Мінімальна ціна по місцях
-//            $seatLayout = json_decode($bus->seat_layout, true);
-            $seatLayout = $bus->seat_layout;
-            $minPrice = collect($seatLayout)->where('type', 'seat')->pluck('price')->map(fn($v)=>intval($v))->min() ?? 0;
+            $startStopId = optional(Stop::where('name', $route->start_point)->first())->id;
+            $endStopId   = optional(Stop::where('name', $route->end_point)->first())->id;
 
-            // Вільні місця (краще порахувати заброньовані на цю дату і цей bus_id)
-            $bookedSeats = \App\Models\Booking::where('bus_id', $bus->id)->where('date', $date)->count();
-            $freeSeats = $bus->seats_count - $bookedSeats;
+            $startStop = $startStopId ? BusStop::where('bus_id', $bus->id)
+                ->where('type', 'boarding')
+                ->where('stop_id', $startStopId)
+                ->first() : null;
 
-            $trip = $tripsByBusId->get($bus->id);
+            $endStop = $endStopId ? BusStop::where('bus_id', $bus->id)
+                ->where('type', 'dropping')
+                ->where('stop_id', $endStopId)
+                ->first() : null;
+
+            $trip = Trip::where('bus_id', $bus->id)
+                ->where('start_location', $route->start_point)
+                ->where('end_location', $route->end_point)
+                ->first();
+
+            $seatLayout = is_string($bus->seat_layout) ? json_decode($bus->seat_layout, true) : $bus->seat_layout;
+            $minPrice = collect($seatLayout ?: [])
+                ->where('type', 'seat')
+                ->pluck('price')
+                ->map(fn($v) => (float)$v)
+                ->filter()
+                ->min() ?? 0;
+
+            $bookedSeats = Booking::where('bus_id', $bus->id)
+                ->whereDate('date', $dateObj->toDateString())
+                ->count();
+            $freeSeats = max(0, ($bus->seats_count ?? 0) - $bookedSeats);
 
             $results[] = [
-                'id' => $bus->id,
+                'id'             => $bus->id,
                 'trip_id'        => $trip->id ?? null,
-                'bus_id' => $bus->id,
-                'bus_name' => $bus->name,
-                'start_location' => $startLocation,
-                'end_location' => $endLocation,
-                'departure_time' => $departureTime,
-                'arrival_time' => $arrivalTime,
-                'price' => $minPrice,
-                'free_seats' => $freeSeats,
+                'bus_id'         => $bus->id,
+                'bus_name'       => $bus->name,
+                'start_location' => $route->start_point,
+                'end_location'   => $route->end_point,
+                'departure_time' => $startStop->time ?? null,
+                'arrival_time'   => $endStop->time ?? null,
+                'price'          => $minPrice,
+                'free_seats'     => $freeSeats,
             ];
         }
 
         return response()->json($results);
     }
-}
 
+    private function busRunsOnDate(Bus $bus, Carbon $date): bool
+    {
+        $type = $bus->schedule_type ?? 'weekly';
+
+        if ($type === 'daily') {
+            return true;
+        }
+
+        if ($type === 'weekly') {
+            $weekday = $date->format('l');
+            $days = is_string($bus->weekly_operation_days)
+                ? json_decode($bus->weekly_operation_days, true)
+                : ($bus->weekly_operation_days ?? []);
+            return in_array($weekday, $days ?? [], true);
+        }
+
+        if (method_exists($bus, 'schedules')) {
+            return $bus->schedules()->whereDate('date', $date->toDateString())->exists();
+        }
+
+        return false;
+    }
+}
