@@ -95,6 +95,28 @@ class RouteScheduleController extends Controller
         return response()->json($results);
     }
 
+//    private function busRunsOnDate(Bus $bus, Carbon $date): bool
+//    {
+//        $type = $bus->schedule_type ?? 'weekly';
+//
+//        if ($type === 'daily') {
+//            return true;
+//        }
+//
+//        if ($type === 'weekly') {
+//            $weekday = $date->format('l');
+//            $days = is_string($bus->weekly_operation_days)
+//                ? json_decode($bus->weekly_operation_days, true)
+//                : ($bus->weekly_operation_days ?? []);
+//            return in_array($weekday, $days ?? [], true);
+//        }
+//
+//        if (method_exists($bus, 'schedules')) {
+//            return $bus->schedules()->whereDate('date', $date->toDateString())->exists();
+//        }
+//
+//        return false;
+//    }
     private function busRunsOnDate(Bus $bus, Carbon $date): bool
     {
         $type = $bus->schedule_type ?? 'weekly';
@@ -104,11 +126,14 @@ class RouteScheduleController extends Controller
         }
 
         if ($type === 'weekly') {
-            $weekday = $date->format('l');
-            $days = is_string($bus->weekly_operation_days)
+            // нормалізуємо регістр і мову (англійські назви)
+            $weekday = strtolower($date->locale('en')->isoFormat('dddd')); // monday..sunday
+            $daysRaw = is_string($bus->weekly_operation_days)
                 ? json_decode($bus->weekly_operation_days, true)
                 : ($bus->weekly_operation_days ?? []);
-            return in_array($weekday, $days ?? [], true);
+            $days = array_map(fn($d) => strtolower((string)$d), $daysRaw ?? []);
+
+            return in_array($weekday, $days, true);
         }
 
         if (method_exists($bus, 'schedules')) {
@@ -117,4 +142,52 @@ class RouteScheduleController extends Controller
 
         return false;
     }
+
+    public function getAvailableDates(Request $request, $routeId)
+    {
+        $route   = BusRoute::findOrFail($routeId);
+        $days    = max(1, min(120, (int)$request->query('days', 60)));
+        $start   = Carbon::today();
+        $dates   = [];
+
+        // шукаємо ті самі автобуси, що й у getBusesByDate
+        $boardingBusIds = DB::table('bus_stops')
+            ->join('stops', 'stops.id', '=', 'bus_stops.stop_id')
+            ->where('bus_stops.type', 'boarding')
+            ->where('stops.name', $route->start_point)
+            ->pluck('bus_stops.bus_id');
+
+        $droppingBusIds = DB::table('bus_stops')
+            ->join('stops', 'stops.id', '=', 'bus_stops.stop_id')
+            ->where('bus_stops.type', 'dropping')
+            ->where('stops.name', $route->end_point)
+            ->pluck('bus_stops.bus_id');
+
+        $buses = Bus::whereIn('id', $boardingBusIds)
+            ->whereIn('id', $droppingBusIds)
+            ->get();
+
+        for ($i = 0; $i < $days; $i++) {
+            $d = $start->copy()->addDays($i);
+
+            $hasAny = false;
+            foreach ($buses as $bus) {
+                if (!$this->busRunsOnDate($bus, $d)) continue;
+
+                $booked = Booking::where('bus_id', $bus->id)
+                    ->whereDate('date', $d->toDateString())
+                    ->count();
+
+                $free = max(0, (int)($bus->seats_count ?? 0) - $booked);
+                if ($free > 0) { $hasAny = true; break; }
+            }
+
+            if ($hasAny) {
+                $dates[] = $d->toDateString(); // 'YYYY-MM-DD'
+            }
+        }
+
+        return response()->json(array_values(array_unique($dates)));
+    }
+
 }

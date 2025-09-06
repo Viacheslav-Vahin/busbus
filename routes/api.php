@@ -3,6 +3,7 @@
 use App\Http\Controllers\SeatController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RouteController;
+use App\Http\Controllers\RouteScheduleController;
 use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\SeatMapController;
 use App\Models\Currency;
@@ -22,6 +23,7 @@ Route::post('/telegram/webhook', [TelegramWebhookController::class, 'handle'])
     ->name('telegram.webhook');
 Route::get('/routes', [RouteController::class, 'apiIndex']);
 Route::get('/routes/{route}/available-dates', [RouteController::class, 'availableDates']);
+Route::get('/routes/{route}/available-dates', [RouteScheduleController::class, 'getAvailableDates']);
 Route::get('/trip/{trip}/bus-info', [\App\Http\Controllers\BookingController::class, 'getBusInfo']);
 Route::post('/book-seat', [\App\Http\Controllers\BookingController::class, 'bookSeat']);
 //Route::post('/wayforpay/webhook', [\App\Http\Controllers\WayforpayWebhookController::class, 'handle'])

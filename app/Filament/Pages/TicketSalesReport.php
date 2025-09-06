@@ -180,6 +180,6 @@ class TicketSalesReport extends Page implements Forms\Contracts\HasForms, Tables
     }
     public static function getNavigationGroup(): ?string
     {
-        return '📃 Звіти';
+        return '📃 Звіти по продажах';
     }
 }

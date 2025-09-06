@@ -5,7 +5,7 @@ import {useLocation, Link} from 'react-router-dom';
 import queryString from 'query-string';
 
 interface Trip {
-    trip_id: number;
+    trip_id: number | null;
     bus_id: number;
     bus_name: string;
     start_location: string;
