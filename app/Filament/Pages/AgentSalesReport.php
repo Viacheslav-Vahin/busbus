@@ -15,6 +15,8 @@ class AgentSalesReport extends Page implements Forms\Contracts\HasForms
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
     protected static ?string $navigationGroup = 'Звіти';
+    protected static ?string $title           = "Звіти";
+
     protected static string $view = 'filament.pages.agent-sales-report';
     protected static ?string $navigationLabel = 'Звіт з проданих квитків';
 

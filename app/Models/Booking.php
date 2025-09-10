@@ -13,6 +13,7 @@ class Booking extends Model
 {
     use HasFactory;
     use LogsActivity;
+    public function agent() { return $this->belongsTo(\App\Models\User::class, 'agent_id'); }
 
     protected $casts = [
         'is_solo_companion'   => 'boolean',

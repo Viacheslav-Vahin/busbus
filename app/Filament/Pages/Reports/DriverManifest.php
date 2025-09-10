@@ -21,6 +21,8 @@ class DriverManifest extends Page implements Forms\Contracts\HasForms
     protected static ?string $navigationGroup = 'Звіти';
     protected static ?string $navigationIcon  = 'heroicon-o-clipboard-document-list';
     protected static ?string $navigationLabel = 'Маніфест водія';
+    protected static ?string $title           = "Маніфест водія";
+
     protected static string $view             = 'filament.pages.reports.driver-manifest';
 
     public ?string $date   = null;

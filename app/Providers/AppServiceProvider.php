@@ -7,6 +7,8 @@ use Livewire\Livewire;
 use App\Http\Livewire\SeatSelector;
 use App\Models\Trip;
 use App\Observers\TripObserver;
+use App\Models\Booking;
+use App\Observers\BookingObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,5 +27,6 @@ class AppServiceProvider extends ServiceProvider
     {
         Livewire::component('seat-selector', \App\Http\Livewire\SeatSelector::class);
         Trip::observe(TripObserver::class);
+        Booking::observe(BookingObserver::class);
     }
 }
