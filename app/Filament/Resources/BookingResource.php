@@ -1132,35 +1132,33 @@ class BookingResource extends Resource
                     ->label('Статус оплати')
                     ->icon('heroicon-o-adjustments-vertical'),
 
-                ...GlobalAccount::all()->map(function ($account) {
-                    $logoUrl = asset('images/logos/' . $account->id . '.png');
+                // BookingResource::table()->actions([...])
+                ...collect(\App\Models\GlobalAccount::all())
+                    ->filter(fn($acc) => $acc->isVisibleTo(auth()->user()))
+                    ->map(function ($account) {
+                        $logoPath = public_path('images/logos/' . $account->id . '.png');
+                        $labelHtml = file_exists($logoPath)
+                            ? '<img src="'.asset('images/logos/'.$account->id.'.png').'" alt="'.e($account->title).'" style="height:15px;display:block;" />'
+                            : e($account->title);
 
-                    return Tables\Actions\Action::make('send_account_' . $account->id)
-                        ->label(fn() => new HtmlString(
-                            '<img src="' . $logoUrl . '" alt="' . e($account->title) . '" style="height:15px;display:block;" />'
-                        ))
-                        ->tooltip('Відправити рахунок клієнту')
-                        ->extraAttributes(['style' => 'padding:3px 5px; min-width:20px;'])
-                        ->color('info')
-                        ->action(function ($record) use ($account) {
-                            $passenger = $record->passengers[0] ?? null;
-                            $route = $record->route_display;
-                            $trip = $record->trip;
-                            $bus = $record->bus;
-                            $accountTitle = $account->title;
-                            $accountDetails = $account->details;
-                            $bookingId = $record->id;
+                        return \Filament\Tables\Actions\Action::make('send_account_' . $account->id)
+                            ->label(fn() => new \Illuminate\Support\HtmlString($labelHtml))
+                            ->tooltip('Відправити рахунок клієнту')
+                            ->extraAttributes(['style' => 'padding:3px 5px; min-width:20px;'])
+                            ->color('info')
+                            ->action(function ($record) use ($account) {
+                                // ... залишаємо твій існуючий код формування $message і відправки у Viber/Telegram
+                                $passenger = $record->passengers[0] ?? null;
+                                $route = $record->route_display;
+                                $trip = $record->trip;
+                                $date = \Carbon\Carbon::parse($record->date)->format('d.m.Y');
+                                $time = $trip->departure_time ?? '12:00';
+                                $seat = $record->selected_seat ?? '-';
+                                $sum  = $record->price;
+                                $purpose = "Оплата за послуги бронювання {$record->id}";
 
-                            $date = \Carbon\Carbon::parse($record->date)->format('d.m.Y');
-                            $time = $trip->departure_time ?? '12:00';
-                            $seat = $record->selected_seat ?? '-';
-                            $sum = $record->price;
-                            $purpose = "Оплата за послуги бронювання $bookingId";
-
-                            $message = <<<MSG
+                                $message = <<<MSG
 🔔 Продовження бронювання – важлива інформація!
-
-Просимо уважно перевірити дані вашого бронювання:
 
 🚌 Рейс: $date о $time
 📍 Маршрут: $route
@@ -1168,54 +1166,37 @@ class BookingResource extends Resource
 💵 До сплати: $sum грн
 
 ⸻
-
 💳 Реквізити для оплати квитка:
 
-$accountDetails
-$accountTitle
+{$account->details}
+{$account->title}
 
 📌 Призначення платежу:
 $purpose
 
-❗️ Для успішного зарахування коштів обов’язково вказуйте правильне призначення платежу.
-
-📤 Після оплати обов’язково надішліть квитанцію або скріншот про оплату у відповідь на це повідомлення.
-
-⸻
-
-ℹ️ Інформація про багаж та умови повернення квитків:
-https://maxbus.com.ua/info/
+Після оплати надішліть квитанцію у відповідь.
 MSG;
 
-                            \App\Services\ViberSender::sendInvoice(
-                                $passenger ? $passenger['phone_number'] : $record->passengerPhone,
-                                $message
-                            );
+                                \App\Services\ViberSender::sendInvoice(
+                                    $passenger ? $passenger['phone_number'] : $record->passengerPhone,
+                                    $message
+                                );
 
-                            $meta = is_string($record->payment_meta)
-                                ? json_decode($record->payment_meta, true) ?: []
-                                : ($record->payment_meta ?? []);
-                            $tgChatId = $meta['telegram_chat_id'] ?? null;
+                                $meta = is_string($record->payment_meta)
+                                    ? json_decode($record->payment_meta, true) ?: []
+                                    : ($record->payment_meta ?? []);
+                                $tgChatId = $meta['telegram_chat_id'] ?? null;
 
-                            if ($tgChatId && class_exists(\App\Services\TelegramSender::class)) {
-                                \App\Services\TelegramSender::sendInvoice($tgChatId, $message);
-                            } else {
-                                $bot = config('services.telegram.bot_username');
-                                if ($bot) {
-                                    $deepLink = "https://t.me/{$bot}?start={$record->order_id}";
-                                    \Filament\Notifications\Notification::make()
-                                        ->title('Telegram: надішліть клієнту лінк для прив’язки')
-                                        ->body($deepLink)
-                                        ->warning()->send();
+                                if ($tgChatId && class_exists(\App\Services\TelegramSender::class)) {
+                                    \App\Services\TelegramSender::sendInvoice($tgChatId, $message);
                                 }
-                            }
 
-                            \Filament\Notifications\Notification::make()
-                                ->title("$accountTitle надіслано у Viber і Telegram")
-                                ->success()
-                                ->send();
-                        });
-                })->toArray(),
+                                \Filament\Notifications\Notification::make()
+                                    ->title($account->title.' надіслано')
+                                    ->success()->send();
+                            });
+                    })->toArray(),
+
             ])
             ->headerActions([
                 Action::make('export_excel')

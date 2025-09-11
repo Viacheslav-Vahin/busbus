@@ -14,6 +14,7 @@ class AgentSalesExportController
     {
         $data = json_decode(base64_decode($request->string('payload')), true);
         $pm = (!empty($data['use_payment_method_filter'])) ? ($data['payment_method'] ?? null) : null;
+        $agentIds = !empty($data['filter_by_agents']) ? array_values(array_filter(array_map('intval', $data['agent_ids'] ?? []))) : [];
         $service = app(\App\Services\Reports\AgentSalesReportService::class);
         $report = $service->generate(
             \Carbon\Carbon::parse($data['from']),
@@ -24,6 +25,7 @@ class AgentSalesExportController
                 'retention_total_percent' => (float)$data['retention_total_percent'],
                 'agent_retention_percent' => (float)$data['agent_retention_percent'],
                 'payment_method' => $pm,
+                'agent_ids' => $agentIds,
             ]
         );
 
@@ -45,6 +47,7 @@ class AgentSalesExportController
     {
         $data = json_decode(base64_decode($request->string('payload')), true);
         $pm = (!empty($data['use_payment_method_filter'])) ? ($data['payment_method'] ?? null) : null;
+        $agentIds = !empty($data['filter_by_agents']) ? array_values(array_filter(array_map('intval', $data['agent_ids'] ?? []))) : [];
 
         $service = app(AgentSalesReportService::class);
         $report = $service->generate(
@@ -56,6 +59,7 @@ class AgentSalesExportController
                 'retention_total_percent' => (float)$data['retention_total_percent'],
                 'agent_retention_percent' => (float)$data['agent_retention_percent'],
                 'payment_method' => $pm,
+                'agent_ids' => $agentIds,
             ]
         );
 

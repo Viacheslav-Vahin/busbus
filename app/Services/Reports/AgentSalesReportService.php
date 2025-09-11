@@ -8,28 +8,24 @@ use Carbon\Carbon;
 
 class AgentSalesReportService
 {
-    public function generate(
-        Carbon $from,
-        Carbon $to,
-        array $opts = []
-    ): array {
-        // UI дає 'currency', у БД це поле 'currency_code'
+    public function generate(Carbon $from, Carbon $to, array $opts = []): array
+    {
         $currency       = $opts['currency'] ?? 'UAH';
-        $paymentMethod  = $opts['payment_method'] ?? null; // якщо null — без фільтра за способом оплати
+        $paymentMethod  = $opts['payment_method'] ?? null;
 
-        // Параметри з форми
-        $agentPercentOnSales     = (float)($opts['agent_percent_on_sales'] ?? 35); // %
-        $retentionTotalPercent   = (float)($opts['retention_total_percent'] ?? 10); // % від ціни при поверненні
-        $agentRetentionPercent   = (float)($opts['agent_retention_percent'] ?? 1);  // % Агента від ціни при поверненні
+        $agentPercentOnSales     = (float)($opts['agent_percent_on_sales'] ?? 35);
+        $retentionTotalPercent   = (float)($opts['retention_total_percent'] ?? 10);
+        $agentRetentionPercent   = (float)($opts['agent_retention_percent'] ?? 1);
         $carrierRetentionPercent = max($retentionTotalPercent - $agentRetentionPercent, 0);
 
-        // Період — по полі `bookings.date` (дата відправлення)
+        $agentIds = array_values(array_filter(array_map('intval', $opts['agent_ids'] ?? [])));
+
         $dateFrom = $from->toDateString();
         $dateTo   = $to->toDateString();
 
-        // === ПРОДАНІ (status = paid) ===
+        // ПРОДАНІ
         $soldQ = Booking::query()
-            ->with(['trip.route', 'route'])
+            ->with(['trip.route','route'])
             ->whereBetween('date', [$dateFrom, $dateTo])
             ->where('status', 'paid')
             ->where('currency_code', $currency);
@@ -37,11 +33,15 @@ class AgentSalesReportService
         if ($paymentMethod) {
             $soldQ->where('payment_method', $paymentMethod);
         }
+        // НОВЕ: якщо вибрали агентів — беремо лише їх продажі
+        if (!empty($agentIds)) {
+            $soldQ->whereIn('agent_id', $agentIds);
+        }
 
         $sold = $soldQ->get();
 
         $soldRows = $sold->map(function (Booking $b) use ($agentPercentOnSales) {
-            $price     = (float) $b->price;
+            $price     = (float)$b->price;
             $agentFee  = round($price * $agentPercentOnSales / 100, 2);
             $toCarrier = round($price - $agentFee, 2);
 
@@ -57,22 +57,24 @@ class AgentSalesReportService
             ];
         })->values();
 
-        // === СКАСОВАНІ / ПОВЕРНЕНІ ===
-        // Якщо треба фільтрувати за payment_method лише ПРОДАНІ — приберіть блок if() нижче.
+        // СКАСОВАНІ/ПОВЕРНЕНІ
         $canceledQ = Booking::query()
-            ->with(['trip.route', 'route'])
+            ->with(['trip.route','route'])
             ->whereBetween('date', [$dateFrom, $dateTo])
-            ->whereIn('status', ['cancelled', 'refunded'])
+            ->whereIn('status', ['cancelled','refunded'])
             ->where('currency_code', $currency);
 
         if ($paymentMethod) {
             $canceledQ->where('payment_method', $paymentMethod);
         }
+        if (!empty($agentIds)) {
+            $canceledQ->whereIn('agent_id', $agentIds);
+        }
 
         $canceled = $canceledQ->get();
 
         $canceledRows = $canceled->map(function (Booking $b) use ($agentRetentionPercent, $carrierRetentionPercent) {
-            $price  = (float) $b->price;
+            $price  = (float)$b->price;
             $agentFromRetention   = round($price * $agentRetentionPercent / 100, 2);
             $carrierFromRetention = round($price * $carrierRetentionPercent / 100, 2);
 
@@ -81,33 +83,35 @@ class AgentSalesReportService
                 'passenger'  => $this->passengerName($b),
                 'direction'  => $this->direction($b),
                 'date'       => optional($b->date)->format('d.m.Y'),
-                'retention_pct' => $agentRetentionPercent + $carrierRetentionPercent, // напр. 10
+                'retention_pct' => $agentRetentionPercent + $carrierRetentionPercent,
                 'price'      => $price,
                 'agent_from_retention'   => $agentFromRetention,
                 'carrier_from_retention' => $carrierFromRetention,
             ];
         })->values();
 
-        // === ПІДСУМКИ (як у макеті) ===
-        $soldTotal     = round($soldRows->sum('price'), 2); // Продано
-        $returnedTotal = round($canceledRows->sum('price'), 2); // Повернено
-        $retainedTotal = round($canceledRows->sum(fn ($r) => $r['agent_from_retention'] + $r['carrier_from_retention']), 2); // Утриманий
+        // Підрахунки
+        $soldTotal     = round($soldRows->sum('price'), 2);
+        $returnedTotal = round($canceledRows->sum('price'), 2);
+        $retainedTotal = round($canceledRows->sum(fn($r)=>$r['agent_from_retention']+$r['carrier_from_retention']), 2);
 
-        $subtotal    = round($soldTotal - $returnedTotal, 2); // Підсумкова сума
-        $agentReward = round($soldRows->sum('agent_fee'), 2); // Винагорода агента (ЛИШЕ з проданих)
-        $toCarrier   = round($subtotal - $agentReward, 2);    // До виплати перевізнику
+        $subtotal    = round($soldTotal - $returnedTotal, 2);
+        $agentReward = round($soldRows->sum('agent_fee'), 2);
+        $toCarrier   = round($subtotal - $agentReward, 2);
 
         return [
             'filters' => [
                 'from' => $from->format('d.m.Y'),
                 'to'   => $to->format('d.m.Y'),
                 'currency' => $currency,
-                'payment_method' => $paymentMethod, // щоб показати у шапці/експорті
+                'payment_method' => $paymentMethod,
                 'agent_percent_on_sales'   => $agentPercentOnSales,
                 'retention_total_percent'  => $retentionTotalPercent,
                 'agent_retention_percent'  => $agentRetentionPercent,
+                // НОВЕ: повернемо на випадок відображення/експорту
+                'agent_ids' => $agentIds,
             ],
-            'totals'   => compact('soldTotal', 'returnedTotal', 'retainedTotal', 'subtotal', 'agentReward', 'toCarrier'),
+            'totals'   => compact('soldTotal','returnedTotal','retainedTotal','subtotal','agentReward','toCarrier'),
             'sold'     => $soldRows,
             'canceled' => $canceledRows,
         ];

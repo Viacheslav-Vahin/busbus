@@ -27,6 +27,10 @@ class GlobalAccountResource extends Resource
             ->schema([
                 TextInput::make('title')->label('Назва рахунка')->required(),
                 Textarea::make('details')->label('Реквізити (текст, IBAN, коментарі...)')->required()->rows(5),
+                Textarea::make('email_whitelist')
+                    ->label("Показувати тільки цим e-mail'ам (через кому)")
+                    ->helperText('Залиш порожнім — кнопку бачитимуть усі менеджери.')
+                    ->rows(2),
             ]);
     }
 

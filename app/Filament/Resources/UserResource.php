@@ -41,6 +41,7 @@ class UserResource extends Resource
 
                 Forms\Components\TextInput::make('password')
                     ->label('Пароль')
+                    ->helperText('Залиште порожнім — пароль не зміниться')
                     ->password()
                     ->revealable()
                     ->dehydrateStateUsing(fn ($state) => filled($state) ? Hash::make($state) : null)

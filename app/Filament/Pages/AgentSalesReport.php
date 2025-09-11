@@ -8,6 +8,8 @@ use Filament\Forms\Form;
 use Filament\Pages\Page;
 use Filament\Actions\Action;
 use Illuminate\Support\Carbon;
+use App\Models\User;
+use Filament\Forms\Get;
 
 class AgentSalesReport extends Page implements Forms\Contracts\HasForms
 {
@@ -24,18 +26,23 @@ class AgentSalesReport extends Page implements Forms\Contracts\HasForms
         'from' => null,
         'to' => null,
         'currency' => 'UAH',
+
         'agent_name' => 'ФОП Кобзар Ю.С.',
         'carrier_name' => 'ТОВ МАКС БУС',
         'contract_no' => '0105/2024-А',
         'contract_date' => '01.05.2024',
+
         'agent_percent_on_sales' => 35,
         'retention_total_percent' => 10,
         'agent_retention_percent' => 1,
+
         'use_payment_method_filter' => false,
         'payment_method' => null,
+
         'act_no'   => '00001',
         'act_city' => 'м. Черкаси',
-        'act_date' => null, // якщо null — підставимо кінець періоду
+        'act_date' => null,
+
         'agent_requisites' => "тел.: +380 (099) 221-10-99,\nІПН 3348116789,\nР/р UA173220010000026005340016044,\nу банку УНІВЕРСАЛ БАНК, МФО 322001,\n20740, Черкаська обл., с.Головятине, вул.Незалежності, буд.10",
         'carrier_requisites' => "Код за ЄДРПОУ 43049327,\nтел.: +38 (097) 221-10-99,\nР/р UA943052990000026004021602992,\nу банку АТ КБ \"ПРИВАТБАНК\", МФО 305299,\n20251, Черкаська обл., м.Ватутіне, вул. Ювілейна 7, кв.35",
 
@@ -61,6 +68,25 @@ class AgentSalesReport extends Page implements Forms\Contracts\HasForms
                     ->label('по')->required()->columnSpan(2),
                 Forms\Components\Select::make('currency')
                     ->label('Валюта')->options(['UAH'=>'UAH','PLN'=>'PLN','EUR'=>'EUR'])->default('UAH')->columnSpan(2),
+                Forms\Components\Toggle::make('filter_by_agents')
+                    ->label('Фільтрувати за агентами')
+                    ->helperText('Якщо вимкнено — звіт по всіх продажах')
+                    ->reactive()
+                    ->columnSpan(3),
+
+                Forms\Components\Select::make('agent_ids')
+                    ->label('Агенти для вибірки')
+                    ->options(fn() => User::query()
+                        ->when(method_exists(User::class, 'role'),
+                            fn($q)=>$q->role(['admin','manager']),
+                            fn($q)=>$q->whereIn('role', ['admin','manager']))
+                        ->orderBy('name')->pluck('name','id')->toArray()
+                    )
+                    ->multiple()
+                    ->searchable()
+                    ->visible(fn(Get $get) => (bool)$get('filter_by_agents'))
+                    ->helperText('Напр.: вибери Юлю та Христину — обидва набори квитків підуть у звіт')
+                    ->columnSpan(9),
                 Forms\Components\TextInput::make('agent_name')->label('АГЕНТ')->columnSpan(3),
                 Forms\Components\TextInput::make('carrier_name')->label('ПЕРЕВІЗНИК')->columnSpan(3),
 
@@ -143,6 +169,7 @@ class AgentSalesReport extends Page implements Forms\Contracts\HasForms
     {
         $v = $this->form->getState();
         $pm = !empty($v['use_payment_method_filter']) ? ($v['payment_method'] ?? null) : null;
+        $agentIds = !empty($v['filter_by_agents']) ? array_values(array_filter(array_map('intval', $v['agent_ids'] ?? []))) : [];
 
         $service = app(AgentSalesReportService::class);
         $this->report = $service->generate(
@@ -154,15 +181,21 @@ class AgentSalesReport extends Page implements Forms\Contracts\HasForms
                 'retention_total_percent' => (float)$v['retention_total_percent'],
                 'agent_retention_percent' => (float)$v['agent_retention_percent'],
                 'payment_method' => $pm,
+
+                // НОВЕ
+                'agent_ids' => $agentIds,
             ]
         );
 
-        // підхопимо службові поля для заголовків
+        // службові поля для заголовків
         $this->report['meta'] = [
             'agent_name'   => $v['agent_name'],
             'carrier_name' => $v['carrier_name'],
             'contract_no'  => $v['contract_no'],
             'contract_date'=> \Carbon\Carbon::parse($v['contract_date'])->format('d.m.Y'),
+            // список, кого включили в вибірку — покажемо «Звіт містить продажі: …»
+            'agents_scope' => collect($agentIds)->map(fn($id)=> optional(User::find($id))->name)->filter()->values()->all(),
         ];
     }
+
 }
