@@ -11,6 +11,24 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AppRouter } from './routes';
+import { Helmet } from "react-helmet-async";
+
+export default function AppLayout({ children }) {
+    return (
+        <>
+            <Helmet>
+                <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96"/>
+                <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+                <link rel="shortcut icon" href="/favicon.ico"/>
+                <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
+                <meta name="apple-mobile-web-app-title" content="MaxBus"/>
+                <meta name="facebook-domain-verification" content="4crrzrx4soy0yj26ii4yqg13qzyyed"/>
+                <link rel="manifest" href="/site.webmanifest"/>
+            </Helmet>
+            {children}
+        </>
+    );
+}
 
 function mountReact() {
     const el = document.getElementById('app');
@@ -20,7 +38,7 @@ function mountReact() {
 
     ReactDOM.createRoot(el).render(
         <React.StrictMode>
-            <AppRouter />
+        <AppRouter />
         </React.StrictMode>,
     );
 }

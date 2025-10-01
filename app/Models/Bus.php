@@ -101,71 +101,92 @@ class Bus extends Model
         return $this->hasMany(BusStop::class)->where('type', 'dropping');
     }
 
+    /** Автобуси, що мають посадку на $fromStopId і висадку на $toStopId */
+    public function scopeForStops(Builder $q, int $fromStopId, int $toStopId): Builder
+    {
+        return $q
+            ->whereHas('busStops', fn ($qq) =>
+            $qq->where('type', 'boarding')->where('stop_id', $fromStopId)
+            )
+            ->whereHas('busStops', fn ($qq) =>
+            $qq->where('type', 'dropping')->where('stop_id', $toStopId)
+            );
+    }
     public function seats()
     {
         return $this->hasMany(\App\Models\BusSeat::class);
     }
 
-    /** Масове збереження зупинок */
-    public function saveBusStops($bus, $data)
+    /* ===================== Допоміжне ===================== */
+
+    /** Обережне отримання масиву з JSON / mixed */
+    public static function arr($val): array
     {
-        $bus->busStops()->delete();
-
-        if (isset($data['boarding_points'])) {
-            foreach ($data['boarding_points'] as $boardingPoint) {
-                $bus->busStops()->create([
-                    'stop_id' => $boardingPoint['stop_id'],
-                    'type'    => 'boarding',
-                    'time'    => $boardingPoint['time'],
-                ]);
-            }
+        if (is_array($val)) return $val;
+        if (is_string($val)) {
+            $d = json_decode($val, true);
+            return is_array($d) ? $d : [];
         }
-
-        if (isset($data['dropping_points'])) {
-            foreach ($data['dropping_points'] as $droppingPoint) {
-                $bus->busStops()->create([
-                    'stop_id' => $droppingPoint['stop_id'],
-                    'type'    => 'dropping',
-                    'time'    => $droppingPoint['time'],
-                ]);
-            }
-        }
+        return [];
     }
 
-    /* ===================== Scopes ===================== */
-
-    /** Автобуси, що мають посадку на $fromStopId і висадку на $toStopId */
-    public function scopeForStops($q, int $fromStopId, int $toStopId)
+    /** Місткість: спершу seats_count, інакше — з seat_layout */
+    public function capacity(): int
     {
-        return $q->whereHas('busStops', fn($qq) => $qq->where('type', 'boarding')->where('stop_id', $fromStopId))
-            ->whereHas('busStops', fn($qq) => $qq->where('type', 'dropping')->where('stop_id', $toStopId));
+        $count = (int)($this->seats_count ?? 0);
+        if ($count > 0) return $count;
+
+        $layout = self::arr($this->seat_layout);
+        if (!$layout) return 0;
+
+        $seatCount = 0;
+        foreach ($layout as $item) {
+            $type = is_array($item) ? strtolower((string)($item['type'] ?? '')) : '';
+            if ($type === 'seat' || $type === 'chair' || $type === 's') {
+                $seatCount++;
+            }
+        }
+        return $seatCount;
     }
 
     /* ===================== Логіка розкладу ===================== */
 
-    /** Чи працює автобус у конкретну дату */
+    /** Чи працює автобус у конкретну дату (головне джерело — operation_days, потім weekly, потім schedules) */
     public function worksOnDate(\DateTimeInterface|string $date): bool
     {
         $d   = $date instanceof \DateTimeInterface ? Carbon::instance($date) : Carbon::parse($date);
         $ds  = $d->toDateString();
-        $dow = $d->format('l'); // Monday..Sunday
+        $dow = strtolower($d->locale('en')->isoFormat('dddd')); // monday..sunday
 
-        $off = collect($this->off_days ?? [])->pluck('date')->all();
-        if (in_array($ds, $off, true)) {
+        $offDays = collect(self::arr($this->off_days))
+            ->map(fn($x) => is_array($x) ? ($x['date'] ?? null) : null)
+            ->filter()->values()->all();
+        if (in_array($ds, $offDays, true)) {
             return false;
         }
 
-        if ($this->has_operation_days && !empty($this->operation_days)) {
-            $ops = collect($this->operation_days)->pluck('date')->all();
-            return in_array($ds, $ops, true);
+        $opDays = collect(self::arr($this->operation_days))
+            ->map(fn($x) => is_array($x) ? ($x['date'] ?? null) : null)
+            ->filter()->values()->all();
+
+        if (!empty($opDays)) {
+            return in_array($ds, $opDays, true);
         }
 
-        $weekly = (array) ($this->weekly_operation_days ?? []);
+        $weekly = array_map(
+            fn($x) => strtolower((string)$x),
+            self::arr($this->weekly_operation_days)
+        );
         if (!empty($weekly)) {
             return in_array($dow, $weekly, true);
         }
 
-        return true;
+        if (method_exists($this, 'schedules')) {
+            return $this->schedules()->whereDate('date', $ds)->exists();
+        }
+
+        // якщо немає жодних джерел — не працює
+        return false;
     }
 
     /** Список дозволених дат у проміжку */
@@ -174,14 +195,14 @@ class Bus extends Model
         $end = $start->copy()->addDays($days);
         $dates = [];
 
-        foreach ((array)($this->operation_days ?? []) as $od) {
+        foreach (self::arr($this->operation_days) as $od) {
             $d = is_array($od) ? ($od['date'] ?? null) : null;
             if ($d && $d >= $start->toDateString() && $d <= $end->toDateString()) {
                 $dates[] = $d;
             }
         }
 
-        $weekly = (array)($this->weekly_operation_days ?? []);
+        $weekly = self::arr($this->weekly_operation_days);
         if ($weekly) {
             $cur = $start->copy();
             while ($cur->lte($end)) {
@@ -199,9 +220,7 @@ class Bus extends Model
     public function scopeHasAnySchedule(Builder $q): Builder
     {
         return $q->where(function ($qq) {
-            // якщо є службові прапорці — використовуємо їх
             $qq->where('has_operation_days', true)
-                // або фактичні JSON масиви
                 ->orWhere(function ($q) {
                     $q->whereNotNull('operation_days')
                         ->whereRaw('JSON_LENGTH(operation_days) > 0');
@@ -215,8 +234,8 @@ class Bus extends Model
 
     public function hasAnySchedule(): bool
     {
-        $ops    = (array) ($this->operation_days ?? []);
-        $weekly = (array) ($this->weekly_operation_days ?? []);
+        $ops    = self::arr($this->operation_days);
+        $weekly = self::arr($this->weekly_operation_days);
         return ($this->has_operation_days ?? false) || !empty($ops) || !empty($weekly);
     }
 }

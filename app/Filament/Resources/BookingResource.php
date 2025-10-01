@@ -62,6 +62,7 @@ use Filament\Tables\Filters\TernaryFilter;
 
 //use Filament\Tables\Filters\Indicator;
 use Filament\Forms\Get;
+use Illuminate\Database\Eloquent\Builder;
 
 class BookingResource extends Resource
 {
@@ -635,7 +636,7 @@ class BookingResource extends Resource
                 while ($cur->lte($end)) {
                     if (
                         self::weeklyMatches($cur, $weekly) &&
-                        (method_exists($bus,'worksOnDate') ? $bus->worksOnDate($cur) : self::fallbackWorksOnDate($bus,$cur))
+                        (method_exists($bus, 'worksOnDate') ? $bus->worksOnDate($cur) : self::fallbackWorksOnDate($bus, $cur))
                     ) {
                         $dates[] = $cur->toDateString();
                     }
@@ -797,24 +798,44 @@ class BookingResource extends Resource
                     Stack::make([
                         TextColumn::make('passengerNames')
                             ->label('Користувач')
-                            ->description('Користувач', position: 'above')
-                            ->icon('heroicon-o-user')
-                            ->weight(FontWeight::Bold)
-                            ->sortable()
-                            ->wrap(),
+                            ->wrap()
+                            ->sortable(query: function (Builder $query, string $direction): Builder {
+                                return $query
+                                    ->orderByRaw("JSON_UNQUOTE(JSON_EXTRACT(passengers, '$[0].last_name')) $direction")
+                                    ->orderByRaw("JSON_UNQUOTE(JSON_EXTRACT(passengers, '$[0].first_name')) $direction");
+                            })
+                            ->searchable(query: function (Builder $query, string $search): Builder {
+                                $like = '%' . $search . '%';
+                                return $query->where(function (Builder $qq) use ($like) {
+                                    $qq->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(passengers, '$[0].first_name')) LIKE ?", [$like])
+                                        ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(passengers, '$[0].last_name'))  LIKE ?", [$like]);
+                                });
+                            }),
+
                         TextColumn::make('passengerPhone')
                             ->label('Телефон')
-                            ->icon('heroicon-o-phone')
-                            ->size('sm')
-                            ->sortable()
-                            ->color('gray'),
+                            ->sortable(query: function (Builder $query, string $direction): Builder {
+                                return $query->orderByRaw("JSON_UNQUOTE(JSON_EXTRACT(passengers, '$[0].phone_number')) $direction");
+                            })
+                            ->searchable(query: function (Builder $query, string $search): Builder {
+                                return $query->whereRaw(
+                                    "JSON_UNQUOTE(JSON_EXTRACT(passengers, '$[0].phone_number')) LIKE ?",
+                                    ['%' . $search . '%']
+                                );
+                            }),
+
                         TextColumn::make('passengerEmail')
                             ->label('Пошта')
-                            ->icon('heroicon-o-envelope')
-                            ->size('sm')
-                            ->sortable()
-                            ->color('gray')
-                            ->wrap(),
+                            ->wrap()
+                            ->sortable(query: function (Builder $query, string $direction): Builder {
+                                return $query->orderByRaw("JSON_UNQUOTE(JSON_EXTRACT(passengers, '$[0].email')) $direction");
+                            })
+                            ->searchable(query: function (Builder $query, string $search): Builder {
+                                return $query->whereRaw(
+                                    "JSON_UNQUOTE(JSON_EXTRACT(passengers, '$[0].email')) LIKE ?",
+                                    ['%' . $search . '%']
+                                );
+                            }),
                     ])->grow()
                         ->extraAttributes(['class' => 'min-w-[300px]']),
 
@@ -824,7 +845,7 @@ class BookingResource extends Resource
                             ->label('Рейс')
                             ->description('Рейс', position: 'above')
                             ->icon('heroicon-o-map-pin')
-                            ->sortable()
+                            ->sortable(false)
                             ->wrap(),
                         TextColumn::make('date')
                             ->label('Дата поїздки')
@@ -850,7 +871,7 @@ class BookingResource extends Resource
                             ->label('Коментар')
                             ->icon('heroicon-o-chat-bubble-left-right')
                             ->searchable()
-                            ->sortable()
+                            ->sortable(false)
                             ->wrap(),
                         BadgeColumn::make('status')
                             ->label('Статус')
@@ -1138,7 +1159,7 @@ class BookingResource extends Resource
                     ->map(function ($account) {
                         $logoPath = public_path('images/logos/' . $account->id . '.png');
                         $labelHtml = file_exists($logoPath)
-                            ? '<img src="'.asset('images/logos/'.$account->id.'.png').'" alt="'.e($account->title).'" style="height:15px;display:block;" />'
+                            ? '<img src="' . asset('images/logos/' . $account->id . '.png') . '" alt="' . e($account->title) . '" style="height:15px;display:block;" />'
                             : e($account->title);
 
                         return \Filament\Tables\Actions\Action::make('send_account_' . $account->id)
@@ -1154,7 +1175,7 @@ class BookingResource extends Resource
                                 $date = \Carbon\Carbon::parse($record->date)->format('d.m.Y');
                                 $time = $trip->departure_time ?? '12:00';
                                 $seat = $record->selected_seat ?? '-';
-                                $sum  = $record->price;
+                                $sum = $record->price;
                                 $purpose = "Оплата за послуги бронювання {$record->id}";
 
                                 $message = <<<MSG
@@ -1192,7 +1213,7 @@ MSG;
                                 }
 
                                 \Filament\Notifications\Notification::make()
-                                    ->title($account->title.' надіслано')
+                                    ->title($account->title . ' надіслано')
                                     ->success()->send();
                             });
                     })->toArray(),

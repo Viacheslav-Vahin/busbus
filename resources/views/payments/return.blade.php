@@ -83,7 +83,7 @@
                 </div>
             </div>
 
-            <div class="flex justify-center">
+            <div class="flex justify-center cta-phone">
                 <div class="bg-white/10 rounded-2xl p-6 md:p-8 w-full max-w-md backdrop-blur">
                     <div class="hcard">
                         <span class="icon">

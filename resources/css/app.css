@@ -103,7 +103,7 @@ body {
     width: 100%;
 }
 .main-header {
-    background-image: url('../images/hero.png');
+    background-image: url('../images/IMG-554.jpg');
     background-position: center;
     background-size: cover;
     position: relative;
@@ -118,8 +118,52 @@ body {
     background-color: #000;
     opacity: 0.3;
 }
+.hero-bg {
+    background-image: url('../images/IMG-554.jpg');
+    background-position: center;
+    background-size: cover;
+    position: relative;
+}
+.hero-bg:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #000;
+    opacity: 0.6;
+}
+.hero-bg .container {
+    position: relative;
+    z-index: 1;
+}
+.hero-bg-2 {
+    background-image: url('../images/IMG-554.jpg');
+    background-position: center;
+    background-size: cover;
+    position: relative;
+    min-height: 300px;
+}
+.hero-bg-2:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #000;
+    opacity: 0.6;
+}
+.hero-bg-2 .container {
+    position: relative;
+    z-index: 1;
+}
 .bg-white {
     background: white;
+}
+nav.bg-white {
+    box-shadow: 0px 0px 5px 2px #212534;
 }
 .header-logo {
     width: 100px;
@@ -133,7 +177,12 @@ body {
     z-index: 1;
 }
 nav a {
-    color: rgb(44, 42, 41);
+    color: rgb(0, 0, 0);
+}
+.main-booking {
+    width: fit-content !important;
+    justify-content: center;
+    min-width: 925px;
 }
 .card {
     background: #191c29;
@@ -160,16 +209,16 @@ nav a {
 
 .card::before {
     content: "";
-    width: 102%;
-    height: 110%;
+    width: 101%;
+    height: 106%;
     border-radius: 8px;
     background-image: linear-gradient(
         var(--rotate)
         , #ffc780, #faa51a 43%, #639cf9);
     position: absolute;
     z-index: -1;
-    top: -5%;
-    left: -1%;
+    top: -3%;
+    left: -0.5%;
     animation: spin 8.5s linear infinite;
 }
 
@@ -263,7 +312,14 @@ nav a {
 #booking-form h2 {
     color: #ffffff;
 }
-
+#booking-form form {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+}
+#booking-form select {
+    background-color: transparent;
+}
 svg.hero-line {
     width: 100%;
     margin-top: -60px;
@@ -304,34 +360,46 @@ footer {
     background-color: #FFFFFF;
 }
 footer h3 {
-    color: rgb(44, 42, 41);
+    color: rgb(255, 255, 255);
 
 }
 footer h4 {
-    color: rgb(44, 42, 41);
+    color: rgb(255, 255, 255);
 }
 footer p {
-    color: rgb(44, 42, 41);
+    color: rgb(255, 255, 255);
     font-size: 11px;
     margin-top: 15px;
 }
 footer a {
-    color: rgb(44, 42, 41);
+    color: rgb(255, 255, 255);
     font-size: 14px;
 }
 footer a:hover {
     color: #faa51a !important;
 }
+.footer-logo {
+    position: relative;
+    padding: 20px 0;
+}
 .footer-logo img {
-    width: 200px;
+    max-width: 200px;
+    width: 100%;
+    position: absolute;
+    top: -80px;
+    left: -25px;
 }
 
 .header-container {
     align-items: flex-start;
-    padding-top: 5rem;
+    padding-top: 15rem;
     padding-bottom: 15rem;
     position: relative;
     z-index: 1;
+}
+.cta-phone {
+    width: 100%;
+    max-width: 390px;
 }
 .hcard .content-wrap .text a {
     font-size: 30px;
@@ -343,7 +411,7 @@ footer a:hover {
 }
 .public-bus-layout {
     padding: 20% 20px;
-    border: 3px solid #ebebeb;
+    border: 3px solid #f8f8f8;
     margin: 20px 60px 60px;
     border-top-left-radius: 25%;
     border-top-right-radius: 25%;
@@ -371,7 +439,7 @@ footer a:hover {
     top: -5px;
     width: 100px;
     height: 40px;
-    background: #ebebeb;
+    background: #f8f8f8;
     border-radius: 50%;
     border: 5px solid #fff;
     transform: rotate(-22deg);
@@ -385,7 +453,7 @@ footer a:hover {
     top: -5px;
     width: 100px;
     height: 40px;
-    background: #ebebeb;
+    background: #f8f8f8;
     border-radius: 50%;
     border: 5px solid #fff;
     transform: rotate(22deg);
@@ -395,7 +463,7 @@ footer a:hover {
     top: 30%;
     width: 40px;
     height: 100px;
-    background-color: #ebebeb;
+    background-color: #f8f8f8;
 }
 .public-bus-layout .wheel.wheel-left {
     left: -40px;
@@ -441,7 +509,7 @@ footer a:hover {
     top: auto;
     left: 0;
     right: 0;
-    transform: translateY(-50%);
+    transform: translateY(-85%);
     bottom: 0;
     z-index: -1;
     /*top: 50%;*/
@@ -945,6 +1013,7 @@ footer a:hover {
 .plane {
     position: absolute;
     right: 0;
+    opacity: .3;
 }
 
 .container-svg svg {
@@ -987,3 +1056,430 @@ svg #airplain {
         stroke-dashoffset: 0;
     }
 }
+
+.bp-input input {
+    border: none;
+    border-bottom: 1px solid #faa51a;
+    border-radius: 0;
+}
+.bp-input input[type=checkbox] {
+    border: 1px solid #faa51a;
+    border-radius: 3px;
+}
+.dpick {
+    width: fit-content;
+    background: #1a1a1a;
+}
+
+.info-pop {
+    position: absolute;
+    top: -10px;
+    right: 10px;
+}
+.cta-section a {
+    font-size: 30px;
+}
+/* ===== Mobile & Tablet tweaks ===== */
+
+/* Зменшуємо навантаження анімацій на мобільних */
+@media (max-width: 768px) {
+    .main-section { display: none; }            /* важкі декорації вимикаємо */
+    .card { margin: 20px 12px; }
+    :root {
+        --card-width: 100%;
+        --card-height: 240px;
+    }
+}
+
+/* Контейнер шапки/герою */
+@media (max-width: 1024px) {
+    .header-container {
+        padding-top: 4rem;
+        padding-bottom: 6rem;
+    }
+}
+
+/* Головний пошук — робимо флюїдним */
+.main-booking { min-width: 0 !important; width: 100%; }
+@media (max-width: 768px) {
+    .main-booking { padding: 16px !important; }
+    #booking-form .grid { grid-template-columns: 1fr !important; }
+}
+
+/* Календар — як фулскрін модал на мобілці */
+@media (max-width: 768px) {
+    .dpick.mobile-fullscreen {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        border-radius: 0 !important;
+        padding: 16px !important;
+        background: #111827; /* gray-900 */
+        overflow: auto;
+    }
+    .dpick.mobile-fullscreen .rdp {
+        background: #fff;
+        border-radius: 12px;
+        padding: 8px;
+    }
+    .dpick .modal-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 12px;
+    }
+    .dpick .modal-actions button {
+        height: 44px;
+        padding: 0 14px;
+        border-radius: 10px;
+    }
+}
+
+/* Хедер/навігація */
+nav .nav-links { display: flex; gap: 2rem; }
+nav .burger { display: none; }
+@media (max-width: 1024px) {
+    nav .nav-links { display: none; }
+    nav .burger { display: inline-flex; }
+}
+
+/* Мобільне оффканвас меню */
+.mobile-nav-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.35);
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+}
+.mobile-nav-panel {
+    position: fixed; inset: 0 0 0 auto; width: 86%;
+    max-width: 360px; background: #ffffff; transform: translateX(100%);
+    transition: transform .25s ease;
+    box-shadow: -16px 0 32px rgba(0,0,0,.15);
+    display: flex; flex-direction: column;
+}
+.mobile-nav-panel .link { padding: 14px 18px; border-bottom: 1px solid #f2f2f2; }
+.mobile-nav-panel .link:hover { background: #f9fafb; }
+
+/* стани відкриття */
+.mobile-nav-open .mobile-nav-backdrop { opacity: 1; pointer-events: auto; }
+.mobile-nav-open .mobile-nav-panel { transform: translateX(0); }
+
+/* Дрібні покращення форм */
+@media (max-width: 768px) {
+    .info-pop { position: static; margin-top: 8px; text-align: center;}
+    .public-bus-layout { margin: 16px 12px 28px; padding: 40px 12px; }
+    .card-search {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        width: calc(100% - 24px);
+        height: auto;
+        border-radius: 15px;
+    }
+    .card-search div.text-right {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding-top: 15px;
+    }
+}
+
+/* Хедер-логотип трохи менший на мобілці */
+@media (max-width: 640px) {
+    .header-logo { width: 78px; }
+}
+
+/* Кнопки в хедері/CTA — повна ширина на мобі */
+@media (max-width: 640px) {
+    .cta-section a { font-size: 18px; }
+    a.btn-mobile { display: inline-block; width: 100%; text-align: center; }
+}
+/* ====== Mobile nav off-canvas ====== */
+.mobile-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease;
+    z-index: 50; /* нижче за панель */
+}
+
+.mobile-nav-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100dvh;            /* iOS friendly */
+    width: min(84vw, 380px);
+    background: #fff;
+    box-shadow: 0 10px 40px rgba(0,0,0,.2);
+    transform: translateX(100%);
+    transition: transform .3s ease;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+}
+
+/* показувати при відкритті */
+.mobile-nav-open .mobile-nav-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mobile-nav-open .mobile-nav-panel {
+    transform: translateX(0);
+}
+
+/* посилання всередині офк-канвасу */
+.mobile-nav-panel .link {
+    display: block;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+    color: #111827;            /* gray-900 */
+    text-decoration: none;
+}
+.mobile-nav-panel .link:hover {
+    background: #f9fafb;       /* gray-50 */
+}
+
+/* дрібні твіки для шапки */
+.header-logo img { height: 34px; display: block; }
+.burger { background: #fff; }
+
+/* календар — фулскрін на мобі */
+.dpick.mobile-fullscreen {
+    position: fixed;
+    inset: 0;
+    background: #111827;
+    z-index: 70;
+    overflow-y: auto;
+    padding: 12px 12px 24px;
+}
+.dpick.mobile-fullscreen .modal-actions{
+    display:flex; justify-content: space-between; gap: 8px; margin-bottom: 8px;
+}
+.dpick.mobile-fullscreen .modal-actions button{
+    height: 42px; border-radius: 10px;
+}
+
+/* основний поповер календаря (десктоп) */
+.dpick {
+    border-radius: 12px;
+    box-shadow: 0 20px 40px rgba(0,0,0,.18);
+}
+
+/* щоб контент не стрибав при прихованому скролі */
+.mobile-nav-open { overflow: hidden; }
+/* ===== Booking form mobile fixes ===== */
+#booking-form { position: relative; z-index: 20; }    /* щоб наступні секції не накривали кнопку */
+
+.main-section {z-index: 0; }     /* декорації нижче за форму */
+
+/* картка форми */
+.main-booking.card {
+    background: rgba(17, 24, 39, 0.92); /* темна карта як у скріні */
+    color: #fff;
+    border-radius: 16px;
+    position: relative;
+}
+
+/* тонка світла рамка всередині */
+.main-booking.card {
+    outline: 1px solid rgba(255,255,255,.12);
+    outline-offset: -8px;
+}
+
+/* поля форми */
+.main-booking select,
+.main-booking button.h-14 {
+    height: 56px;
+    border-radius: 14px;
+    font-size: 16px;
+}
+
+/* swap-кнопка між містами */
+.main-booking .swap-btn {
+    height: 64px; width: 64px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255,255,255,.5);
+    background: transparent;
+    display: grid; place-items: center;
+}
+
+/* підказка під формою */
+.main-booking .info-pop {
+    padding-left: 2px;
+}
+
+/* щоб наступний заголовок не «під’їжджав» */
+section[id="benefits"],
+section[id="popular"],
+section[id="faq"] {
+    position: relative; z-index: 0;
+}
+/* ===== Floating labels for booking form ===== */
+.fgroup {
+    position: relative;
+}
+
+.fgroup label.flabel {
+    position: absolute;
+    left: 16px;
+    top: 18px;                /* початкова позиція */
+    font-size: 16px;
+    line-height: 1;
+    color: rgba(255,255,255,.9);  /* під світло/темну карту ок */
+    pointer-events: auto;     /* щоб можна натискати на лейбл */
+    transition: all .18s ease;
+}
+
+/* «піднятий» стан */
+.fgroup.raised label.flabel {
+    top: -8px;
+    left: 12px;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(17,24,39,.92);    /* збігається з темною картою */
+    color: #fff;
+}
+
+/* сам контрол: робимо верхній паддінг, щоб лейбл не перекривав текст */
+.fgroup .control {
+    height: 56px;
+    padding: 20px 16px 5px;           /* <- запас під лейбл */
+    border-radius: 14px;
+    font-size: 16px;
+}
+
+/* підсвітка при фокусі */
+.fgroup:focus-within .control {
+    box-shadow: 0 0 0 2px rgba(250,165,26,.45);
+    outline: none;
+}
+
+/* світлі бордери під темну карту */
+.main-booking .control {
+    border: 1px solid rgba(255,255,255,.35);
+    background: rgba(255,255,255,.04);
+    color: #fff;
+}
+
+.main-booking .control:disabled {
+    opacity: .7;
+    background: rgba(255,255,255,.08);
+}
+
+/* щоб клік по лейблу кнопки-дати виглядав як фокус */
+.flabel--asButton { cursor: pointer; }
+/* --- tune for iOS/Android selects --- */
+.fgroup .control {
+    height: 56px;
+    padding: 26px 16px 5px;  /* було 20 — підняли до 26 */
+    border-radius: 14px;
+    font-size: 16px;
+    line-height: 1.25;
+}
+
+/* важливо: саме для <select> */
+.fgroup select.control {
+    padding-top: 28px;                /* ще трохи запасу */
+    -webkit-padding-start: 16px;      /* iOS */
+    background-color: rgba(255,255,255,.04);
+}
+
+/* стартова позиція лейбла */
+.fgroup label.flabel {
+    position: absolute;
+    left: 16px;
+    top: 12px;                        /* було 18 — підняли */
+    font-size: 16px;
+    color: rgba(255,255,255,.9);
+    transition: all .18s ease;
+}
+
+/* піднятий стан */
+.fgroup.raised label.flabel {
+    top: -10px;                       /* трохи вище, щоб не торкався рамки */
+    left: 12px;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(17,24,39,.92);
+    color: #fff;
+}
+
+/* коли піднято — повертаємо нормальний верхній падінг полю,
+   щоб текст знову був по центру */
+.fgroup.raised .control {
+    padding-top: 14px;                /* було 26–28, стає компактніше */
+}
+
+/* підсвітка фокуса і базові стилі картки як були */
+.fgroup:focus-within .control { box-shadow: 0 0 0 2px rgba(250,165,26,.45); outline: none; }
+.main-booking .control { border: 1px solid rgba(255,255,255,.35); color: #fff; }
+.main-booking .control:disabled { opacity: .7; background: rgba(255,255,255,.08); }
+.flabel--asButton { cursor: pointer; }
+
+/* мобільні дрібниці */
+@media (max-width: 768px) {
+    /* стисліші відступи карти */
+    .main-booking.card { padding: 16px; height: auto; padding: 50px 30px !important;}
+    /* більше відстані під кнопкою */
+    #booking-form { padding-bottom: 24px; }
+    /* кнопка пошуку — фулвітд і вище шару */
+    .main-booking .btn-submit {
+        width: 100%;
+        position: relative;
+        z-index: 10;
+    }
+    .main-booking .swap-btn {
+        height: 35px;
+        width: 100%;
+    }
+    .card::before {
+        width: 102%;
+        height: 102%;
+        border-radius: 15px;
+        top: -1%;
+        left: -1%;
+    }
+    .main-booking.card label {
+        font-size: 16px;
+    }
+    .hero-sm {
+        padding: 40px 15px;
+    }
+    .srwrapp.pmin {
+        padding: 15px;
+        padding-bottom: 40px;
+    }
+    .seatswrapp {
+        padding: 15px;
+        margin: 0;
+    }
+    .plane {
+        display: none;
+    }
+    .hcard .content-wrap .text a {
+        font-size: 26px;
+    }
+}
+
+/*nav.shadow-md {*/
+/*    background: linear-gradient(-45deg, #faa51a, #ffffff, #faa51a, #ffffff);*/
+/*    background-size: 400% 400%;*/
+/*    animation: gradient 15s ease infinite;*/
+/*}*/
+
+/*@keyframes gradient {*/
+/*    0% {*/
+/*        background-position: 0% 50%;*/
+/*    }*/
+/*    50% {*/
+/*        background-position: 100% 50%;*/
+/*    }*/
+/*    100% {*/
+/*        background-position: 0% 50%;*/
+/*    }*/
+/*}*/

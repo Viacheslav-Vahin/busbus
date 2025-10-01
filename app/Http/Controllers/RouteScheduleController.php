@@ -15,12 +15,86 @@ use Carbon\Carbon;
 
 class RouteScheduleController extends Controller
 {
+    /* ===================== Helpers ===================== */
+
+    private function arr($v): array
+    {
+        if (is_array($v)) return $v;
+        if (is_string($v)) {
+            $d = json_decode($v, true);
+            return is_array($d) ? $d : [];
+        }
+        return [];
+    }
+
+    private function busRunsOnDate(Bus $bus, Carbon $date): bool
+    {
+        $ds  = $date->toDateString();
+        $dow = strtolower($date->locale('en')->isoFormat('dddd')); // monday..sunday
+
+        // 1) off_days блокують роботу
+        $offDays = collect($this->arr($bus->off_days))
+            ->map(fn($x) => is_array($x) ? ($x['date'] ?? null) : null)
+            ->filter()->values()->all();
+        if (in_array($ds, $offDays, true)) {
+            return false;
+        }
+
+        // 2) головне джерело — operation_days
+        $opDays = collect($this->arr($bus->operation_days))
+            ->map(fn($x) => is_array($x) ? ($x['date'] ?? null) : null)
+            ->filter()->values()->all();
+        if (!empty($opDays)) {
+            return in_array($ds, $opDays, true);
+        }
+
+        // 3) weekly як фолбек
+        $weekly = array_map(fn($x) => strtolower((string)$x), $this->arr($bus->weekly_operation_days));
+        if (!empty($weekly)) {
+            return in_array($dow, $weekly, true);
+        }
+
+        // 4) schedules як ще один фолбек
+        if (method_exists($bus, 'schedules')) {
+            return $bus->schedules()->whereDate('date', $ds)->exists();
+        }
+
+        // 5) без джерел — не працює
+        return false;
+    }
+
+    private function busCapacity(Bus $bus): int
+    {
+        // використовуємо метод моделі, якщо є
+        if (method_exists($bus, 'capacity')) {
+            return (int)$bus->capacity();
+        }
+
+        // фолбек: seats_count або рахувати з seat_layout
+        $count = (int)($bus->seats_count ?? 0);
+        if ($count > 0) return $count;
+
+        $layout = $this->arr($bus->seat_layout);
+        if (!$layout) return 0;
+
+        $seatCount = 0;
+        foreach ($layout as $item) {
+            $type = is_array($item) ? strtolower((string)($item['type'] ?? '')) : '';
+            if ($type === 'seat' || $type === 'chair' || $type === 's') {
+                $seatCount++;
+            }
+        }
+        return $seatCount;
+    }
+
+    /* ===================== Endpoints ===================== */
+
     public function getBusesByDate(Request $request)
     {
         $routeId = $request->input('route_id');
         $date    = $request->input('date');
 
-        $route  = BusRoute::findOrFail($routeId);
+        $route   = BusRoute::findOrFail($routeId);
         $dateObj = Carbon::parse($date);
 
         // ті ж самі критерії: пара boarding/dropping за назвами зупинок
@@ -71,12 +145,17 @@ class RouteScheduleController extends Controller
                 ->pluck('price')
                 ->map(fn($v) => (float)$v)
                 ->filter()
-                ->min() ?? 0;
+                ->min() ?? 0.0;
 
             $bookedSeats = Booking::where('bus_id', $bus->id)
                 ->whereDate('date', $dateObj->toDateString())
                 ->count();
-            $freeSeats = max(0, ($bus->seats_count ?? 0) - $bookedSeats);
+
+            $capacity  = $this->busCapacity($bus);
+            $freeSeats = max(0, $capacity - $bookedSeats);
+            if ($freeSeats <= 0) {
+                continue;
+            }
 
             $results[] = [
                 'id'             => $bus->id,
@@ -92,55 +171,7 @@ class RouteScheduleController extends Controller
             ];
         }
 
-        return response()->json($results);
-    }
-
-//    private function busRunsOnDate(Bus $bus, Carbon $date): bool
-//    {
-//        $type = $bus->schedule_type ?? 'weekly';
-//
-//        if ($type === 'daily') {
-//            return true;
-//        }
-//
-//        if ($type === 'weekly') {
-//            $weekday = $date->format('l');
-//            $days = is_string($bus->weekly_operation_days)
-//                ? json_decode($bus->weekly_operation_days, true)
-//                : ($bus->weekly_operation_days ?? []);
-//            return in_array($weekday, $days ?? [], true);
-//        }
-//
-//        if (method_exists($bus, 'schedules')) {
-//            return $bus->schedules()->whereDate('date', $date->toDateString())->exists();
-//        }
-//
-//        return false;
-//    }
-    private function busRunsOnDate(Bus $bus, Carbon $date): bool
-    {
-        $type = $bus->schedule_type ?? 'weekly';
-
-        if ($type === 'daily') {
-            return true;
-        }
-
-        if ($type === 'weekly') {
-            // нормалізуємо регістр і мову (англійські назви)
-            $weekday = strtolower($date->locale('en')->isoFormat('dddd')); // monday..sunday
-            $daysRaw = is_string($bus->weekly_operation_days)
-                ? json_decode($bus->weekly_operation_days, true)
-                : ($bus->weekly_operation_days ?? []);
-            $days = array_map(fn($d) => strtolower((string)$d), $daysRaw ?? []);
-
-            return in_array($weekday, $days, true);
-        }
-
-        if (method_exists($bus, 'schedules')) {
-            return $bus->schedules()->whereDate('date', $date->toDateString())->exists();
-        }
-
-        return false;
+        return response()->json(array_values($results));
     }
 
     public function getAvailableDates(Request $request, $routeId)
@@ -169,25 +200,27 @@ class RouteScheduleController extends Controller
 
         for ($i = 0; $i < $days; $i++) {
             $d = $start->copy()->addDays($i);
+            $ds = $d->toDateString();
 
             $hasAny = false;
             foreach ($buses as $bus) {
                 if (!$this->busRunsOnDate($bus, $d)) continue;
 
                 $booked = Booking::where('bus_id', $bus->id)
-                    ->whereDate('date', $d->toDateString())
+                    ->whereDate('date', $ds)
                     ->count();
 
-                $free = max(0, (int)($bus->seats_count ?? 0) - $booked);
+                $capacity = $this->busCapacity($bus);
+                $free     = max(0, $capacity - $booked);
+
                 if ($free > 0) { $hasAny = true; break; }
             }
 
             if ($hasAny) {
-                $dates[] = $d->toDateString(); // 'YYYY-MM-DD'
+                $dates[] = $ds; // 'YYYY-MM-DD'
             }
         }
 
         return response()->json(array_values(array_unique($dates)));
     }
-
 }

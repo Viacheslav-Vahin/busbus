@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import IndexPage from './Pages/IndexPage';
 import SearchResultsPage from './Pages/SearchResultsPage';
 import BookingPage from './Pages/BookingPage';
+import CmsPage from './pages/CmsPage';
 
 
 // const container = document.getElementById('root')!;
@@ -16,6 +17,7 @@ root.render(
             <Route path="/" element={<IndexPage />} />
             <Route path="/search" element={<SearchResultsPage />} />
             <Route path="/book" element={<BookingPage />} />
+            <Route path="/terms" element={<CmsPage slug="terms" />} />
         </Routes>
     </BrowserRouter>
 );

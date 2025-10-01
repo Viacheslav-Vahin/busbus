@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class BookingController extends Controller
 {
@@ -540,6 +541,46 @@ class BookingController extends Controller
                 'surname'    => $user->surname,
                 'bus'        => $bus->name,
             ],
+        ]);
+    }
+
+    public function getBusInfoByBusId(Request $request, $busId)
+    {
+        $date = $request->query('date');
+        $date = $date ? Carbon::parse($date)->toDateString() : null;
+
+        $bus = Bus::findOrFail($busId);
+
+        // нормалізуємо layout
+        $layout = $bus->seat_layout;
+        if (is_string($layout)) {
+            $decoded = json_decode($layout, true);
+            $layout = json_last_error() === JSON_ERROR_NONE ? $decoded : [];
+        }
+        $layout = $layout ?? [];
+
+        // зайняті місця на дату
+        $bookedSeats = [];
+        if ($date) {
+            // Якщо у тебе колонка називається інакше (наприклад seat), заміни 'seat_number' нижче
+            $bookedSeats = Booking::where('bus_id', $bus->id)
+                ->whereDate('date', $date)
+                ->pluck('seat_number')
+                ->map(fn($n) => (string)$n)
+                ->values()
+                ->all();
+        }
+
+        return response()->json([
+            'bus' => [
+                'id'           => $bus->id,
+                'name'         => $bus->name,
+                'seats_count'  => $bus->seats_count,
+                'route_id'     => $bus->route_id,
+                'seat_layout'  => $layout,
+            ],
+            'booked_seats' => $bookedSeats,
+            // 'held_seats' => [] // додай, якщо тримаєш холди у БД і хочеш показувати їх тут
         ]);
     }
 }

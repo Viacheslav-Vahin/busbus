@@ -3,7 +3,12 @@ import React, {useEffect, useMemo, useRef, useState} from "react";
 import axios from "axios";
 import {useSearchParams} from "react-router-dom";
 import BusLayout from "./BusLayout";
-
+const smoothScrollToId = (id: string) => {
+    const el = document.querySelector(id);
+    if (!el) return;
+    const y = (el as HTMLElement).getBoundingClientRect().top + window.scrollY - 12;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+};
 declare global {
     interface Window {
         gtag?: (...args: any[]) => void;
@@ -68,6 +73,8 @@ const EXTRAS: Record<string, { label: string; price: number }> = {
 const CHILD_DISCOUNT_PCT = 10; // -10% на дитячий
 
 export default function BookingPage() {
+    const [mobileOpen, setMobileOpen] = useState(false);
+
     const [searchParams] = useSearchParams();
 
     // dev-режим: ?mockPay=1 або VITE_MOCK_PAYMENT=1
@@ -490,96 +497,6 @@ export default function BookingPage() {
     };
 
 
-    // const handleSubmit = (e: React.FormEvent) => {
-    //     e.preventDefault();
-    //     if (invalidSeats.length) return;
-    //
-    //     const payload = {
-    //         trip_id: Number(tripId),
-    //         date,
-    //         seats: selectedSeats.map(Number),
-    //         solo,
-    //         hold_token: holdToken || null,
-    //         passengers: selectedSeats.map(n => ({
-    //             seat: Number(n),
-    //             category: passengers[n]?.category ?? "adult",
-    //             extras: passengers[n]?.extras ?? [],
-    //             first_name: passengers[n]?.firstName ?? "",
-    //             last_name:  passengers[n]?.lastName ?? "",
-    //             doc_number: passengers[n]?.docNumber ?? "",
-    //         })),
-    //         ...form,
-    //         currency_code: currency,
-    //         promo_code: promo?.trim() || undefined,
-    //     };
-    //
-    //     // axios.post("/api/book-seat", payload).then(({ data }) => {
-    //     //     setTicketPreview(data.ticket_preview);
-    //     //     setPaymentForm(data.payment_form);
-    //     //     if ((window as any).gtag) {
-    //     //         (window as any).gtag('event', 'add_payment_info', {
-    //     //             currency: 'UAH',
-    //     //             // value: frontTotals.total,
-    //     //             value: totalAfterPromoUAH,
-    //     //             payment_type: 'wayforpay',
-    //     //         });
-    //     //     }
-    //     //     setTimeout(() => {
-    //     //         (document.querySelector('form[action*="liqpay"], form[action*="wayforpay"]') as HTMLFormElement | null)?.submit();
-    //     //     }, 500);
-    //     // });
-    //
-    //     axios.post("/api/book-seat", payload).then(async ({ data }) => {
-    //         setTicketPreview(data.ticket_preview);
-    //
-    //         // === DEV: симулюємо успішну оплату ===
-    //         if (DEV_MOCK_PAYMENT) {
-    //             try {
-    //                 // Стукаємо в dev-ендпойнт, який робить те саме, що вебхук успішного платежу
-    //                 await axios.post("/api/dev/mock-paid", {
-    //                     // якщо з /api/book-seat повертається order_reference — передай
-    //                     order_reference: data.order_reference ?? null,
-    //                     // те, що треба для створення юзера та підтвердження бронювання:
-    //                     trip_id: Number(tripId),
-    //                     date,
-    //                     seats: selectedSeats.map(Number),
-    //                     user: {
-    //                         name: form.name,
-    //                         surname: form.surname,
-    //                         email: form.email,
-    //                         phone: form.phone,
-    //                         password: form.password,
-    //                     },
-    //                 });
-    //             }  catch (e:any) {
-    //                 const msg =
-    //                     e?.response?.data?.message ||
-    //                     Object.values(e?.response?.data?.errors || {})?.flat()?.[0] ||
-    //                     'Помилка бронювання';
-    //                 alert(String(msg));
-    //                 console.error(e?.response?.data || e);
-    //             }
-    //
-    //             // Показуємо, що все “оплачено” й не відправляємо на платіжку
-    //             setPaymentForm('<div class="p-3 rounded border border-green-300 bg-green-50">DEV: Оплату пропущено. Вважаємо успішною ✅</div>');
-    //             return; // важливо: НЕ сабмітити платіжну форму
-    //         }
-    //
-    //         // === ПРОД: звичайний шлях із реальним платіжним шлюзом ===
-    //         setPaymentForm(data.payment_form);
-    //         if ((window as any).gtag) {
-    //             (window as any).gtag('event', 'add_payment_info', {
-    //                 currency: 'UAH',
-    //                 value: totalAfterPromoUAH,
-    //                 payment_type: 'wayforpay',
-    //             });
-    //         }
-    //         setTimeout(() => {
-    //             (document.querySelector('form[action*="liqpay"], form[action*="wayforpay"]') as HTMLFormElement | null)?.submit();
-    //         }, 500);
-    //     });
-    // };
-
     // ---- STANDBY: визначити sold-out та старт пред-авторизації ----
     const allSeatNumbers = useMemo(() => (
         layout.filter(s => s.type === 'seat' && s.number != null).map(s => String(s.number))
@@ -625,6 +542,31 @@ export default function BookingPage() {
         }
     };
 
+    // 2) ESC закриває мобільне меню — ХУК МАЄ БУТИ ДО BUDЬ-ЯКИХ return
+    useEffect(() => {
+        const closeOnEsc = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setMobileOpen(false);
+        };
+        window.addEventListener('keydown', closeOnEsc);
+        return () => window.removeEventListener('keydown', closeOnEsc);
+    }, []);
+
+    // 3) Блокування скролу, коли відкрите меню
+    useEffect(() => {
+        document.body.classList.toggle('mobile-nav-open', mobileOpen);
+        document.body.style.overflow = mobileOpen ? 'hidden' : '';
+        return () => {
+            document.body.classList.remove('mobile-nav-open');
+            document.body.style.overflow = '';
+        };
+    }, [mobileOpen]);
+
+    const handleAnchor = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>, hash: string) => {
+        e.preventDefault();
+        setMobileOpen(false);
+        smoothScrollToId(hash);
+    };
+
 
     // Якщо вже маємо форму оплати (звичайної або standby) — віддаємо її
     if (paymentForm) {
@@ -646,21 +588,68 @@ export default function BookingPage() {
     return (
         <div className="page-wrapper">
             {/* Top bar */}
-            <nav className="bg-white text-white shadow-md">
+            <nav className="bg-white text-white shadow-md relative z-40">
                 <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-                    <a href="/" className="header-logo">
+                    <a href="/" className="header-logo" onClick={e => {
+                        e.preventDefault();
+                        window.location.href = '/';
+                    }}>
                         <img src="../../images/Asset-21.svg" alt=""/>
                     </a>
-                    <ul className="flex space-x-8">
-                        <li><a href="#" className="hover:text-brand-light transition">Головна</a></li>
-                        <li><a href="#" className="hover:text-brand-light transition">Про нас</a></li>
-                        <li><a href="#" className="hover:text-brand-light transition">Контакти</a></li>
+
+                    {/* Desktop links */}
+                    <ul className="nav-links hidden md:flex gap-8 items-center">
+                        <li><a href="#booking-form" onClick={(e) => handleAnchor(e, '#booking-form')}
+                               className="hover:text-brand-light transition">Головна</a></li>
+                        <li><a href="#benefits" onClick={(e) => handleAnchor(e, '#benefits')}
+                               className="hover:text-brand-light transition">Переваги</a></li>
+                        <li><a href="#popular" onClick={(e) => handleAnchor(e, '#popular')}
+                               className="hover:text-brand-light transition">Напрямки</a></li>
+                        <li><a href="#faq" onClick={(e) => handleAnchor(e, '#faq')}
+                               className="hover:text-brand-light transition">FAQ</a></li>
                     </ul>
+
+                    {/* Burger (tablet/mobile) */}
+                    <button
+                        aria-label="Відкрити меню"
+                        aria-expanded={mobileOpen}
+                        className="burger md:hidden flex h-11 w-11 rounded-lg border border-gray-200 text-gray-800 items-center justify-center"
+                        onClick={() => setMobileOpen(true)}
+                    >
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" color="#000000"
+                             stroke="currentColor">
+                            <path d="M3 6h18M3 12h18M3 18h18"/>
+                        </svg>
+                    </button>
                 </div>
+
+                {/* Offcanvas + backdrop */}
+                <div className="mobile-nav-backdrop md:hidden" onClick={() => setMobileOpen(false)}/>
+                <aside className="mobile-nav-panel md:hidden">
+                    <div className="flex items-center justify-between p-4 border-b">
+                        <span className="font-semibold text-gray-800">Меню</span>
+                        <button aria-label="Закрити меню" className="h-10 w-10 grid place-items-center"
+                                onClick={() => setMobileOpen(false)}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" color="#000000"
+                                 stroke="currentColor">
+                                <path d="M6 6l12 12M18 6l-12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <nav className="flex-1 overflow-y-auto">
+                        <a href="#booking-form" className="link"
+                           onClick={(e) => handleAnchor(e, '#booking-form')}>Головна</a>
+                        <a href="#benefits" className="link" onClick={(e) => handleAnchor(e, '#benefits')}>Переваги</a>
+                        <a href="#popular" className="link" onClick={(e) => handleAnchor(e, '#popular')}>Напрямки</a>
+                        <a href="#faq" className="link" onClick={(e) => handleAnchor(e, '#faq')}>FAQ</a>
+                        <a href="tel:+380930510795" className="link">+38093&nbsp;051&nbsp;0795</a>
+                        <a href="mailto:info@maxbus.com" className="link">info@maxbus.com</a>
+                    </nav>
+                </aside>
             </nav>
 
             {/* Hero */}
-            <header className="bg-gradient-to-r from-brand to-brand-dark text-white">
+            <header className="bg-gradient-to-r hero-bg-2 from-brand to-brand-dark text-white">
                 <div className="container mx-auto px-6 py-10">
                     <h1 className="text-4xl font-bold">Вибір місць</h1>
                 </div>
@@ -685,7 +674,7 @@ export default function BookingPage() {
                 </div>
             </div>
 
-            <div className="max-w-6xl mx-auto bg-white p-12 rounded mt-40 mb-40 container">
+            <div className="seatswrapp max-w-6xl mx-auto bg-white p-12 rounded mt-40 mb-40 container bp-input">
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                     {/* LEFT */}
@@ -734,7 +723,7 @@ export default function BookingPage() {
                                             className="text-sm underline hover:no-underline"
                                             onClick={fillAllFromContact}
                                         >
-                                            Заповнити всіх як у контактних
+                                            Заповнити всіх як у контактних данних ↓
                                         </button>
                                     </div>
                                 )}
@@ -980,7 +969,7 @@ export default function BookingPage() {
                                 className="space-y-6"
                             >
                                 {/* Контактні дані */}
-                                <div className="border rounded p-4">
+                                <div className="border rounded p-4 bp-input">
                                     <div className="text-xl font-semibold mb-3">Контактні дані</div>
                                     <div className="grid gap-3">
                                         <input className="p-2 border rounded" placeholder="Ім'я" required
@@ -1034,29 +1023,72 @@ export default function BookingPage() {
                 </div>
             </div>
 
-            <footer className="bg-white text-gray-300">
-                <div className="container mx-auto px-6 py-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <footer className="bg-[#0f1f33] text-white">
+                <div className="container mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-4 gap-10">
                     <div>
-                        <a href="/" className="footer-logo">
-                            <img src="../../images/Asset-21.svg" alt=""/>
+                        <a href="/" className="footer-logo block mb-3">
+                            <img src="../../images/logomin.png" alt=""/>
                         </a>
-                        <p>© 2025 MaxBus. Всі права захищені.</p>
+                        <p className="text-white/80 mb-4">© 2025 MaxBus. Всі права захищені.</p>
+                        <p className="text-white/60 text-sm">
+                            Ми допомагаємо швидко знайти і купити автобусні квитки онлайн. Підтримуємо безпечну оплату і
+                            прозорі правила повернення.
+                        </p>
                     </div>
+
                     <div>
-                        <h4 className="font-semibold mb-2 heading">Посилання</h4>
-                        <ul className="space-y-1">
-                            <li><a href="#" className="hover:text-white transition">Головна</a></li>
-                            <li><a href="#" className="hover:text-white transition">Про нас</a></li>
-                            <li><a href="#" className="hover:text-white transition">Контакти</a></li>
+                        <h4 className="font-semibold mb-3 heading">Сторінки</h4>
+                        <ul className="space-y-2 text-white/80">
+                            <li><a href="#booking-form" className="hover:text-white transition">Пошук квитків</a></li>
+                            <li><a href="#benefits" className="hover:text-white transition">Переваги сервісу</a></li>
+                            <li><a href="#popular" className="hover:text-white transition">Популярні напрямки</a></li>
+                            <li><a href="#faq" className="hover:text-white transition">FAQ</a></li>
                         </ul>
                     </div>
+
                     <div>
-                        <h4 className="font-semibold mb-2 heading">Контакти</h4>
-                        <p>info@maxbus.com</p>
-                        <p>+380 44 123 4567</p>
+                        <h4 className="font-semibold mb-3 heading">Допомога</h4>
+                        <ul className="space-y-2 text-white/80">
+                            <li><a href="mailto:info@maxbus.com" className="hover:text-white transition">Підтримка:
+                                info@maxbus.com</a></li>
+                            <li><a href="tel:+380930510795" className="hover:text-white transition">+380 93 051 0795</a>
+                            </li>
+                            <li className="text-white/60 text-sm">Графік: 24/7</li>
+                            <li className="text-white/60 text-sm">Повернення та обмін — за правилами перевізника</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 className="font-semibold mb-3 heading">Юридична інформація</h4>
+                        <ul className="space-y-2 text-white/80">
+                            <li><a href="/terms" className="hover:text-white transition">Умови використання</a></li>
+                            <li><a href="#" className="hover:text-white transition">Політика конфіденційності</a></li>
+                            <li><a href="/info" className="hover:text-white transition">Публічний договір</a></li>
+                        </ul>
+                        <div className="mt-4 flex gap-3 text-xl">
+                            <a href="#" aria-label="Facebook" className="hover:text-brand-light transition"><i
+                                className="fa fa-facebook"/></a>
+                            <a href="#" aria-label="Instagram" className="hover:text-brand-light transition"><i
+                                className="fa fa-instagram"/></a>
+                            <a href="#" aria-label="Telegram" className="hover:text-brand-light transition"><i
+                                className="fa fa-telegram"/></a>
+                        </div>
+                    </div>
+                </div>
+                <div className="border-t border-white/10">
+                    <div
+                        className="container mx-auto px-6 py-4 text-white/60 text-sm flex flex-wrap items-center gap-3">
+                        <span>Платіжні системи:</span>
+                        <span className="px-2 py-1 rounded bg-white/10">VISA</span>
+                        <span className="px-2 py-1 rounded bg-white/10">Mastercard</span>
+                        <span className="px-2 py-1 rounded bg-white/10">Apple Pay</span>
+                        <span className="px-2 py-1 rounded bg-white/10">Google Pay</span>
+                        {/*<span className="px-2 py-1 rounded bg-white/10">LiqPay</span>*/}
+                        <span className="px-2 py-1 rounded bg-white/10">WayForPay</span>
                     </div>
                 </div>
             </footer>
+
         </div>
     );
 }

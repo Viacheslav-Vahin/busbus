@@ -117,3 +117,6 @@ Route::get('/reports/agent-sales/pdf',   [AgentSalesExportController::class, 'pd
 // нові:
 Route::get('/reports/agent-sales/act-pdf',   [AgentSalesExportController::class, 'actPdf'])->name('reports.agent-sales.act-pdf');
 Route::get('/reports/agent-sales/act-excel', [AgentSalesExportController::class, 'actExcel'])->name('reports.agent-sales.act-excel');
+
+Route::view('/{path?}', 'index')
+    ->where('path', '^(?!api|admin|filament|storage|vendor|livewire|_debugbar|telescope|horizon).*$');
